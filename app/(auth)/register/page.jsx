@@ -7,18 +7,16 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/components/context/AuthContext';
 import { useToast } from '@/components/context/ToastContext';
-import { ShieldCheck, UserPlus, AlertCircle, ArrowRight, LogIn, Mail, Lock } from 'lucide-react';
+import { ShieldCheck, UserPlus, AlertCircle, ArrowRight, LogIn, Lock } from 'lucide-react';
 
 export default function RegisterPage() {
-  const { signInWithOtp, verifyOtp } = useAuth();
+  const { register } = useAuth();
   const { success } = useToast();
 
-  const [step, setStep] = useState(1); // 1: Name, Email, Password | 2: Verify OTP & Save to DB
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [otpCode, setOtpCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -28,8 +26,7 @@ export default function RegisterPage() {
   const hasLower = /[a-z]/.test(password);
   const hasNumber = /[0-9]/.test(password);
 
-  // STEP 1: Submit Details -> Send Email OTP
-  const handleInitiateRegistration = async (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -44,7 +41,7 @@ export default function RegisterPage() {
     }
 
     if (!hasMinLength || !hasUpper || !hasLower || !hasNumber) {
-      setErrorMsg('Please satisfy all password strength requirements.');
+      setErrorMsg('Password must be at least 8 characters with uppercase, lowercase, and numbers.');
       return;
     }
 
@@ -55,32 +52,10 @@ export default function RegisterPage() {
 
     setIsLoading(true);
     try {
-      await signInWithOtp(email, name, true);
-      setStep(2);
-      success('6-digit security code sent to your email!');
-    } catch (err) {
-      setErrorMsg(err.message || 'Failed to send security code. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // STEP 2: Verify OTP -> Store details in DB & Activate Vault
-  const handleVerifyAndActivate = async (e) => {
-    e.preventDefault();
-    setErrorMsg('');
-
-    if (!otpCode || otpCode.length < 6) {
-      setErrorMsg('Please enter the 6-digit security code sent to your email');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      await verifyOtp(email, otpCode, name, password);
+      await register(email, password, confirmPassword, name);
       success(`Welcome to Panda Vault, ${name.trim()}!`);
     } catch (err) {
-      setErrorMsg(err.message || 'Invalid or expired code. Please try again.');
+      setErrorMsg(err.message || 'Failed to create account. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -102,185 +77,116 @@ export default function RegisterPage() {
           <div className="space-y-1">
             <h2 className="text-base font-semibold text-white flex items-center gap-2">
               <UserPlus className="w-4 h-4 text-teal-400" />
-              <span>{step === 1 ? 'Create Personal Vault' : 'Verify Email Security Code'}</span>
+              <span>Create Personal Vault</span>
             </h2>
             <p className="text-xs text-slate-400">
-              {step === 1
-                ? 'Enter your name, email, and master password to get started.'
-                : 'Enter the 6-digit code sent to your email to verify and activate your vault.'}
+              Enter your name, email, and master password to get started instantly.
             </p>
           </div>
 
           {errorMsg && (
-            <div className="flex items-center gap-2.5 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs animate-slide-up">
+            <div className="flex items-center gap-2.5 p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs animate-slide-up">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
 
-          {/* STEP 1: NAME, EMAIL, PASSWORD FORM */}
-          {step === 1 && (
-            <form onSubmit={handleInitiateRegistration} className="space-y-4">
-              <Input
-                label="Full Name"
-                type="text"
-                placeholder="Alex Morgan"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                autoComplete="name"
-                autoFocus
-              />
+          <form onSubmit={handleRegister} className="space-y-4">
+            <Input
+              label="Full Name"
+              type="text"
+              placeholder="Alex Morgan"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              autoComplete="name"
+              autoFocus
+              className="rounded-2xl"
+            />
 
-              <Input
-                label="Email Address"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
+            <Input
+              label="Email Address"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              className="rounded-2xl"
+            />
 
-              <Input
-                label="Master Password"
-                type="password"
-                placeholder="••••••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-              />
+            <Input
+              label="Master Password"
+              type="password"
+              placeholder="••••••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="new-password"
+              className="rounded-2xl"
+            />
 
-              {password && (
-                <div className="grid grid-cols-2 gap-1.5 p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400 font-mono">
-                  <div className="flex items-center gap-1.5">
-                    <span className={hasMinLength ? 'text-teal-400' : 'text-slate-600'}>
-                      {hasMinLength ? '✓' : '○'}
-                    </span>
-                    <span>8+ Characters</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className={hasUpper ? 'text-teal-400' : 'text-slate-600'}>
-                      {hasUpper ? '✓' : '○'}
-                    </span>
-                    <span>Uppercase Letter</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className={hasLower ? 'text-teal-400' : 'text-slate-600'}>
-                      {hasLower ? '✓' : '○'}
-                    </span>
-                    <span>Lowercase Letter</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className={hasNumber ? 'text-teal-400' : 'text-slate-600'}>
-                      {hasNumber ? '✓' : '○'}
-                    </span>
-                    <span>Number</span>
-                  </div>
-                </div>
-              )}
-
-              <Input
-                label="Confirm Password"
-                type="password"
-                placeholder="••••••••••••"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-              />
-
-              <div className="pt-2">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="md"
-                  className="w-full"
-                  isLoading={isLoading}
-                  icon={ArrowRight}
-                >
-                  Send Verification Code
-                </Button>
+            {/* Password strength visual pill indicators */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1">
+              <div className={`p-1.5 rounded-xl text-[10px] text-center border font-mono transition-colors ${
+                hasMinLength ? 'bg-teal-500/10 border-teal-500/40 text-teal-300' : 'bg-slate-950 border-slate-800 text-slate-500'
+              }`}>
+                8+ Chars
               </div>
-            </form>
-          )}
-
-          {/* STEP 2: VERIFY OTP & ACTIVATE */}
-          {step === 2 && (
-            <form onSubmit={handleVerifyAndActivate} className="space-y-4">
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs text-slate-300 flex items-center justify-between">
-                <div>
-                  <p className="font-semibold text-white">{name}</p>
-                  <p className="text-slate-400 text-[11px] truncate">{email}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStep(1);
-                    setOtpCode('');
-                  }}
-                  className="text-teal-400 hover:text-teal-300 text-[11px] underline shrink-0 font-medium ml-2"
-                >
-                  Change
-                </button>
+              <div className={`p-1.5 rounded-xl text-[10px] text-center border font-mono transition-colors ${
+                hasUpper ? 'bg-teal-500/10 border-teal-500/40 text-teal-300' : 'bg-slate-950 border-slate-800 text-slate-500'
+              }`}>
+                Uppercase
               </div>
-
-              <Input
-                label="6-Digit Verification Code"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={6}
-                placeholder="000000"
-                value={otpCode}
-                onChange={(e) => {
-                  const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 6);
-                  setOtpCode(digitsOnly);
-                }}
-                required
-                autoComplete="one-time-code"
-                autoFocus
-                className="font-mono text-center tracking-widest text-lg"
-              />
-
-              <Button
-                type="submit"
-                variant="primary"
-                size="md"
-                className="w-full"
-                isLoading={isLoading}
-                icon={LogIn}
-              >
-                Verify & Activate Vault
-              </Button>
-
-              <div className="text-center pt-1">
-                <button
-                  type="button"
-                  onClick={handleInitiateRegistration}
-                  disabled={isLoading}
-                  className="text-xs text-slate-400 hover:text-teal-400 underline font-medium"
-                >
-                  Resend code
-                </button>
+              <div className={`p-1.5 rounded-xl text-[10px] text-center border font-mono transition-colors ${
+                hasLower ? 'bg-teal-500/10 border-teal-500/40 text-teal-300' : 'bg-slate-950 border-slate-800 text-slate-500'
+              }`}>
+                Lowercase
               </div>
-            </form>
-          )}
+              <div className={`p-1.5 rounded-xl text-[10px] text-center border font-mono transition-colors ${
+                hasNumber ? 'bg-teal-500/10 border-teal-500/40 text-teal-300' : 'bg-slate-950 border-slate-800 text-slate-500'
+              }`}>
+                Number
+              </div>
+            </div>
 
-          {/* Security Badge */}
-          <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800/80 flex items-center gap-2.5 text-[11px] text-slate-400">
-            <ShieldCheck className="w-4 h-4 text-teal-400 shrink-0" />
-            <span>Zero-knowledge encryption. Details are verified & stored securely.</span>
+            <Input
+              label="Confirm Master Password"
+              type="password"
+              placeholder="••••••••••••"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              autoComplete="new-password"
+              className="rounded-2xl"
+            />
+
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              className="w-full rounded-2xl"
+              isLoading={isLoading}
+              icon={ArrowRight}
+            >
+              Create Account & Open Vault
+            </Button>
+          </form>
+
+          <div className="pt-2 border-t border-slate-800/80 text-center">
+            <p className="text-xs text-slate-400">
+              Already have a vault?{' '}
+              <Link href="/login" className="text-teal-400 hover:text-teal-300 font-semibold inline-flex items-center gap-1">
+                <span>Sign in here</span>
+                <LogIn className="w-3 h-3" />
+              </Link>
+            </p>
           </div>
+        </div>
 
-          {/* Login Link */}
-          <div className="text-center text-xs text-slate-400 pt-2 border-t border-slate-800">
-            Already have a vault?{' '}
-            <Link href="/login" className="text-teal-400 hover:text-teal-300 font-semibold underline">
-              Sign in
-            </Link>
-          </div>
+        <div className="mt-6 flex items-center justify-center gap-2 text-[11px] text-slate-500">
+          <ShieldCheck className="w-3.5 h-3.5 text-teal-400" />
+          <span>Zero-Knowledge • End-to-End Encrypted with AES-256-GCM</span>
         </div>
       </div>
     </div>

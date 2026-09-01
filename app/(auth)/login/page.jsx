@@ -16,7 +16,7 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const isInactiveReason = searchParams.get('reason') === 'inactivity';
 
-  const [authMethod, setAuthMethod] = useState('otp'); // 'otp' | 'password'
+  const [authMethod, setAuthMethod] = useState('password'); // 'password' | 'otp'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [otpCode, setOtpCode] = useState('');
@@ -114,22 +114,6 @@ function LoginContent() {
             <button
               type="button"
               onClick={() => {
-                setAuthMethod('otp');
-                setErrorMsg('');
-              }}
-              className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold transition-all ${
-                authMethod === 'otp'
-                  ? 'bg-teal-500 text-slate-950 shadow-glow-teal'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Mail className="w-3.5 h-3.5" />
-              <span>Email OTP</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
                 setAuthMethod('password');
                 setErrorMsg('');
               }}
@@ -141,6 +125,22 @@ function LoginContent() {
             >
               <KeyRound className="w-3.5 h-3.5" />
               <span>Password</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMethod('otp');
+                setErrorMsg('');
+              }}
+              className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold transition-all ${
+                authMethod === 'otp'
+                  ? 'bg-teal-500 text-slate-950 shadow-glow-teal'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>Email OTP</span>
             </button>
           </div>
 
