@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createUser, findUserByEmail, updateUserPassword, updateUserName } from '@/lib/db/users';
+import { createUser, findUserByEmail, syncSupabaseUser } from '@/lib/db/users';
 import { createSession } from '@/lib/db/sessions';
 import { hashPassword } from '@/lib/crypto/argon2';
-import { validateEmail, validatePasswordStrength } from '@/lib/validation/schemas';
+import { validateEmail } from '@/lib/validation/schemas';
 import { checkRateLimit, getClientIp } from '@/lib/security/rate-limit';
 import { logAuditEvent } from '@/lib/security/audit';
 import { getSessionCookieOptions } from '@/lib/auth/session';
+import { isSupabaseConfigured, getSupabaseAdminClient, getSupabaseServerClient } from '@/lib/auth/supabase';
 
 export async function POST(request) {
   const ip = getClientIp(request);
@@ -32,14 +33,69 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Passwords do not match.' }, { status: 400 });
     }
 
-    // Hash password with Argon2id
-    const passwordHash = await hashPassword(password);
-    const user = await createUser(email, passwordHash, null, name || null);
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = name ? name.trim() : null;
 
-    // Create initial session
+    let userId = null;
+
+    // 1. If Supabase is configured, create/sign up with Supabase Auth
+    if (isSupabaseConfigured()) {
+      const adminClient = getSupabaseAdminClient();
+      if (adminClient && adminClient.auth?.admin) {
+        try {
+          const { data: adminData, error: adminErr } = await adminClient.auth.admin.createUser({
+            email: cleanEmail,
+            password,
+            email_confirm: true,
+            user_metadata: { full_name: cleanName, name: cleanName },
+          });
+
+          if (!adminErr && adminData?.user) {
+            userId = adminData.user.id;
+          }
+        } catch {}
+      }
+
+      if (!userId) {
+        const serverClient = getSupabaseServerClient();
+        if (serverClient) {
+          try {
+            const { data: signupData, error: signupErr } = await serverClient.auth.signUp({
+              email: cleanEmail,
+              password,
+              options: {
+                data: { full_name: cleanName, name: cleanName },
+              },
+            });
+
+            if (signupErr) {
+              return NextResponse.json({ error: signupErr.message }, { status: 400 });
+            }
+
+            if (signupData?.user) {
+              userId = signupData.user.id;
+            }
+          } catch (sbErr) {
+            console.warn('Supabase register error:', sbErr.message);
+          }
+        }
+      }
+    }
+
+    // 2. Hash password with Argon2id and save into PostgreSQL public.users
+    const passwordHash = await hashPassword(password);
+    const user = await syncSupabaseUser({
+      id: userId || `user-${Date.now()}`,
+      email: cleanEmail,
+      name: cleanName,
+      password,
+      passwordHash,
+    });
+
+    // 3. Create initial session
     const { rawToken, expiresAt } = await createSession(user.id);
 
-    // Audit log
+    // 4. Audit log
     await logAuditEvent({
       userId: user.id,
       action: 'auth:register',

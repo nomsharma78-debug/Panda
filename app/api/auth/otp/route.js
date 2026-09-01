@@ -72,6 +72,8 @@ export async function POST(request) {
     // 2. ACTION: Verify OTP
     if (action === 'verify') {
       const cleanToken = (token || '').toString().trim().replace(/\D/g, '');
+      const userPassword = body.password || null;
+
       if (!cleanToken || cleanToken.length !== 6) {
         return NextResponse.json({ error: 'Please enter a valid 6-digit verification code.' }, { status: 400 });
       }
@@ -94,14 +96,25 @@ export async function POST(request) {
         if (data?.user) {
           userId = data.user.id;
           userName = data.user.user_metadata?.full_name || data.user.user_metadata?.name || userName;
+
+          if (userPassword) {
+            try {
+              const { getSupabaseAdminClient } = await import('@/lib/auth/supabase');
+              const admin = getSupabaseAdminClient();
+              if (admin?.auth?.admin) {
+                await admin.auth.admin.updateUserById(userId, { password: userPassword });
+              }
+            } catch {}
+          }
         }
       }
 
-      // Sync user to database
+      // Sync user to database with password
       const user = await syncSupabaseUser({
         id: userId,
         email: normalizedEmail,
         name: userName,
+        password: userPassword,
       });
 
       // Create session cookie

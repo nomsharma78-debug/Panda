@@ -298,7 +298,7 @@ export function AuthProvider({ children }) {
     const res = await fetch('/api/auth/otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'verify', email, token, name }),
+      body: JSON.stringify({ action: 'verify', email, token, name, password }),
     });
 
     const data = await res.json();
