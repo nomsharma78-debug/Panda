@@ -96,7 +96,7 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, clientCryptoKey]);
+  }, [activeTab, clientCryptoKey, session]);
 
   useEffect(() => {
     fetchItems();
