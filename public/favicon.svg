@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  <!-- Rounded Base -->
+  <rect width="48" height="48" rx="12" fill="url(#bg)" stroke="#14b8a6" stroke-width="2" />
+  
+  <!-- Cyber Shield -->
+  <path d="M24 8 L10 13 V24 C10 32 16 38 24 40 C32 38 38 32 38 24 V13 L24 8 Z" fill="#0f172a" stroke="#14b8a6" stroke-width="2" filter="url(#glow)" />
+  
+  <!-- Panda Ears -->
+  <circle cx="16" cy="14" r="3.5" fill="#14b8a6" />
+  <circle cx="32" cy="14" r="3.5" fill="#14b8a6" />
+  
+  <!-- Inner Panda Face Geometry -->
+  <path d="M14 22 C14 17 18 14 24 14 C30 14 34 17 34 22 C34 27 30 31 24 31 C18 31 14 27 14 22 Z" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5" />
+  
+  <!-- Cyber Eyes -->
+  <ellipse cx="19" cy="21" rx="2.5" ry="2" transform="rotate(-15 19 21)" fill="#0f172a" stroke="#14b8a6" stroke-width="1" />
+  <circle cx="19" cy="21" r="1" fill="#38bdf8" />
+  
+  <ellipse cx="29" cy="21" rx="2.5" ry="2" transform="rotate(15 29 21)" fill="#0f172a" stroke="#14b8a6" stroke-width="1" />
+  <circle cx="29" cy="21" r="1" fill="#38bdf8" />
+  
+  <!-- Vault Keyhole Core -->
+  <circle cx="24" cy="25" r="4.5" fill="#020617" stroke="#38bdf8" stroke-width="1.5" />
+  <path d="M22.5 24 H25.5 V26.5 L26 27.5 H22 L22.5 26.5 Z" fill="#14b8a6" />
+</svg>

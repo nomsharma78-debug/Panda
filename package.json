@@ -1,0 +1,34 @@
+{
+  "name": "panda-vault",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Panda — Secure Personal Digital Vault",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "node scripts/test-runner.js",
+    "db:migrate": "node scripts/migrate.js up",
+    "db:status": "node scripts/migrate.js status"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.758.0",
+    "@aws-sdk/s3-request-presigner": "^3.758.0",
+    "@supabase/ssr": "^0.12.5",
+    "@supabase/supabase-js": "^2.112.4",
+    "clsx": "^2.1.1",
+    "hash-wasm": "^4.12.0",
+    "lucide-react": "^1.16.0",
+    "next": "^15.2.1",
+    "pg": "^8.13.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^3.0.2"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17"
+  }
+}

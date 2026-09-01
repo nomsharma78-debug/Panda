@@ -1,0 +1,335 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import {
+  KeyRound,
+  CreditCard,
+  FileText,
+  Film,
+  HardDrive,
+  Plus,
+  Upload,
+  ShieldCheck,
+  ArrowRight,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
+  Cloud,
+  Lock,
+} from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Progress, formatBytes } from '@/components/ui/Progress';
+import { Badge } from '@/components/ui/Badge';
+import { MediaLightbox } from '@/components/media/MediaLightbox';
+import { useAuth } from '@/components/context/AuthContext';
+
+export function DashboardOverview({
+  onOpenUpload,
+  onOpenAddVaultItem,
+  onOpenAddStorage,
+}) {
+  const { user } = useAuth();
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Lightbox state for recent media
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/dashboard');
+      if (res.ok) {
+        const d = await res.json();
+        setData(d);
+      }
+    } catch (e) {
+      console.error('Failed to load dashboard data:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  };
+
+  const statCards = [
+    {
+      title: 'Passwords',
+      count: data?.vault?.login || 0,
+      icon: KeyRound,
+      href: '/vault?type=login',
+      color: 'text-teal-400 bg-teal-500/10 border-teal-500/30',
+      subtitle: 'Encrypted in Database',
+    },
+    {
+      title: 'Payment Cards',
+      count: data?.vault?.card || 0,
+      icon: CreditCard,
+      href: '/vault?type=card',
+      color: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/30',
+      subtitle: 'Encrypted in Database',
+    },
+    {
+      title: 'Secure Notes',
+      count: data?.vault?.note || 0,
+      icon: FileText,
+      href: '/vault?type=note',
+      color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+      subtitle: 'Encrypted in Database',
+    },
+    {
+      title: 'Media Files',
+      count: data?.media?.total || 0,
+      icon: Film,
+      href: '/media',
+      color: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
+      subtitle: 'In Cloud Storage',
+    },
+  ];
+
+  const hasStorage = (data?.storage?.providerCount || 0) > 0;
+
+  return (
+    <div className="space-y-8 animate-fade-in">
+      {/* Top Banner Greeting */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs font-mono font-semibold uppercase tracking-wider text-teal-400">
+            <ShieldCheck className="w-4 h-4" />
+            <span>Encrypted Personal Digital Vault</span>
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+            {getGreeting()}, {user?.name || (user?.email ? user.email.split('@')[0] : 'there')}!
+          </h2>
+          <p className="text-xs text-slate-400 max-w-lg leading-relaxed">
+            Your login credentials, cards, and notes are encrypted in Panda&apos;s database. Media files are securely stored in your connected cloud object storage.
+          </p>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={Plus}
+            onClick={() => onOpenAddVaultItem('login')}
+          >
+            New Password
+          </Button>
+
+          <Button
+            variant="primary"
+            size="sm"
+            icon={hasStorage ? Upload : Cloud}
+            onClick={hasStorage ? onOpenUpload : onOpenAddStorage}
+          >
+            {hasStorage ? 'Upload Media' : 'Connect Storage'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Zero Storage Onboarding Banner if not yet connected */}
+      {!hasStorage && !loading && (
+        <div className="p-5 sm:p-6 rounded-3xl bg-slate-900 border border-teal-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-card">
+          <div className="flex items-start gap-3.5">
+            <div className="p-2.5 rounded-2xl bg-teal-500/10 border border-teal-500/20 text-teal-400 shrink-0 mt-0.5">
+              <Cloud className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-sm font-semibold text-white">Connect cloud storage to unlock your media library</h4>
+              <p className="text-xs text-slate-400 max-w-xl leading-relaxed">
+                Vault passwords, cards, and notes are ready immediately. To upload photos, videos, and documents, connect your Cloudflare R2, Backblaze B2, or Amazon S3 bucket.
+              </p>
+            </div>
+          </div>
+
+          <Button
+            variant="primary"
+            size="sm"
+            icon={Plus}
+            onClick={onOpenAddStorage}
+            className="shrink-0"
+          >
+            Connect Cloud Storage
+          </Button>
+        </div>
+      )}
+
+      {/* 4 Stat Overview Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {statCards.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <Link
+              key={stat.title}
+              href={stat.href}
+              className="bg-slate-900 border border-slate-800 hover:border-slate-700/80 rounded-2xl p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 group"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className={`p-2.5 rounded-xl border ${stat.color}`}>
+                  <Icon className="w-4 h-4" />
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-teal-400 group-hover:translate-x-0.5 transition-all" />
+              </div>
+              <p className="text-xs font-medium text-slate-400">{stat.title}</p>
+              <h3 className="text-2xl font-bold text-white mt-0.5 font-mono">
+                {loading ? '...' : stat.count}
+              </h3>
+              <p className="text-[10px] text-slate-500 font-mono mt-1">{stat.subtitle}</p>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Main 2-Column Split: Storage Indicator & Recent Media */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Storage Widget (1 Column) */}
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-card flex flex-col justify-between space-y-5">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                <HardDrive className="w-4 h-4 text-teal-400" />
+                <span>Object Storage</span>
+              </div>
+              <Link href="/storage" className="text-xs text-teal-400 hover:underline">
+                Manage
+              </Link>
+            </div>
+
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Unified capacity across all connected external cloud buckets.
+            </p>
+
+            <div className="space-y-2 bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
+              <div className="flex justify-between text-xs text-slate-200 font-medium">
+                <span>{data?.storage ? formatBytes(data.storage.usedBytes) : '0 B'} used</span>
+                <span className="text-slate-400">
+                  {data?.storage?.totalBytes ? formatBytes(data.storage.totalBytes) : 'Elastic Cloud'}
+                </span>
+              </div>
+              {data?.storage?.totalBytes && (
+                <Progress
+                  value={data.storage.usedBytes || 0}
+                  max={data.storage.totalBytes}
+                  size="md"
+                  variant="teal"
+                />
+              )}
+              <p className="text-[11px] text-slate-500 font-mono text-right pt-1">
+                {data?.storage?.providerCount || 0} connected provider{data?.storage?.providerCount !== 1 ? 's' : ''}
+              </p>
+            </div>
+          </div>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={HardDrive}
+            onClick={onOpenAddStorage}
+            className="w-full text-xs"
+          >
+            Connect Cloud Storage
+          </Button>
+        </div>
+
+        {/* Recent Media Preview Strip (2 Columns) */}
+        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-card flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-semibold text-white">
+              <Film className="w-4 h-4 text-teal-400" />
+              <span>Recent Cloud Media</span>
+            </div>
+            <Link href="/media" className="text-xs text-teal-400 hover:underline flex items-center gap-1">
+              <span>View All</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {loading ? (
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="aspect-square rounded-2xl bg-slate-950 animate-pulse" />
+              ))}
+            </div>
+          ) : !data?.recentMedia || data.recentMedia.length === 0 ? (
+            <div className="p-8 text-center bg-slate-950/60 rounded-2xl border border-slate-800/80 space-y-2">
+              <p className="text-xs text-slate-400">
+                {hasStorage
+                  ? 'No media files uploaded yet.'
+                  : 'Connect your cloud storage to start uploading photos, videos, and documents.'}
+              </p>
+              <Button
+                variant={hasStorage ? 'primary' : 'secondary'}
+                size="sm"
+                icon={hasStorage ? Upload : Plus}
+                onClick={hasStorage ? onOpenUpload : onOpenAddStorage}
+              >
+                {hasStorage ? 'Upload Photo or Video' : 'Connect Storage'}
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+              {data.recentMedia.map((m, idx) => (
+                <button
+                  key={m.id}
+                  onClick={() => {
+                    setLightboxIndex(idx);
+                    setLightboxOpen(true);
+                  }}
+                  className="aspect-square rounded-2xl bg-slate-950 border border-slate-800 hover:border-teal-500/60 overflow-hidden relative group transition-all"
+                >
+                  <div className="w-full h-full flex items-center justify-center text-slate-400 group-hover:scale-105 transition-transform">
+                    {m.media_type === 'video' ? (
+                      <Film className="w-6 h-6 text-amber-400" />
+                    ) : m.media_type === 'pdf' || m.media_type === 'document' ? (
+                      <FileText className="w-6 h-6 text-teal-400" />
+                    ) : (
+                      <ImageIcon className="w-6 h-6 text-teal-400" />
+                    )}
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-2 flex flex-col justify-end">
+                    <p className="text-[10px] text-white font-medium truncate">{m.original_filename}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/80">
+            <span className="flex items-center gap-1.5 text-[11px] text-slate-500 font-mono">
+              <Lock className="w-3.5 h-3.5 text-teal-400" />
+              <span>Direct streaming from user cloud storage</span>
+            </span>
+            <Link href="/vault" className="text-teal-400 hover:underline flex items-center gap-1 text-xs">
+              <span>Open Password Vault</span>
+              <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Lightbox for Recent Media */}
+      {data?.recentMedia && (
+        <MediaLightbox
+          mediaList={data.recentMedia}
+          currentIndex={lightboxIndex}
+          isOpen={lightboxOpen}
+          onClose={() => setLightboxOpen(false)}
+          onIndexChange={setLightboxIndex}
+        />
+      )}
+    </div>
+  );
+}
