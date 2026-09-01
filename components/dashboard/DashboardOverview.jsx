@@ -102,15 +102,15 @@ export function DashboardOverview({
   const hasStorage = (data?.storage?.providerCount || 0) > 0;
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-6 sm:space-y-8 animate-fade-in">
       {/* Top Banner Greeting */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-xs font-mono font-semibold uppercase tracking-wider text-teal-400">
-            <ShieldCheck className="w-4 h-4" />
+      <div className="bg-gradient-to-r from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
+        <div className="space-y-1.5 sm:space-y-2">
+          <div className="flex items-center gap-2 text-[11px] sm:text-xs font-mono font-semibold uppercase tracking-wider text-teal-400">
+            <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             <span>Encrypted Personal Digital Vault</span>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-tight">
             {getGreeting()}, {user?.name || (user?.email ? user.email.split('@')[0] : 'there')}!
           </h2>
           <p className="text-xs text-slate-400 max-w-lg leading-relaxed">
@@ -119,12 +119,13 @@ export function DashboardOverview({
         </div>
 
         {/* Quick Actions */}
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
           <Button
             variant="secondary"
             size="sm"
             icon={Plus}
             onClick={() => onOpenAddVaultItem('login')}
+            className="rounded-xl sm:rounded-2xl"
           >
             New Password
           </Button>
@@ -134,6 +135,7 @@ export function DashboardOverview({
             size="sm"
             icon={hasStorage ? Upload : Cloud}
             onClick={hasStorage ? onOpenUpload : onOpenAddStorage}
+            className="rounded-xl sm:rounded-2xl"
           >
             {hasStorage ? 'Upload Media' : 'Connect Storage'}
           </Button>

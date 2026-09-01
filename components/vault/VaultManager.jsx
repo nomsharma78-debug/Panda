@@ -23,7 +23,7 @@ import { decryptClientVaultItem } from '@/lib/crypto/client-vault';
 
 export function VaultManager({ initialType = 'all', onOpenAddModal }) {
   const router = useRouter();
-  const { clientCryptoKey } = useAuth();
+  const { session, clientCryptoKey } = useAuth();
   const { success, error: toastError } = useToast();
 
   const [activeTab, setActiveTab] = useState(initialType);
@@ -54,7 +54,12 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
     try {
       setLoading(true);
       const url = activeTab === 'all' ? '/api/vault' : `/api/vault?type=${activeTab}`;
-      const res = await fetch(url);
+      const headers = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const res = await fetch(url, { headers });
       if (res.ok) {
         const data = await res.json();
         const rawItems = data.items || [];
@@ -115,7 +120,11 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/vault/${deleteTarget.id}`, { method: 'DELETE' });
+      const headers = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      const res = await fetch(`/api/vault/${deleteTarget.id}`, { method: 'DELETE', headers });
       if (res.ok) {
         success('Vault item deleted.');
         fetchItems();

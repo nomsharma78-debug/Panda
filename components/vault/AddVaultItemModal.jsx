@@ -30,7 +30,7 @@ export function AddVaultItemModal({
   onItemCreated,
 }) {
   const { success, error: toastError } = useToast();
-  const { clientCryptoKey } = useAuth();
+  const { session, clientCryptoKey } = useAuth();
 
   // Mode: 'choose' (Step 1 picker) | 'login' | 'card' | 'note' | 'identity'
   const [type, setType] = useState('login');
@@ -171,9 +171,14 @@ export function AddVaultItemModal({
         });
       }
 
+      const headers = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const res = await fetch('/api/vault', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           type,
           encryptedPayload: encryptedPayloadString,
