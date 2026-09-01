@@ -329,6 +329,12 @@ export function AuthProvider({ children }) {
           password,
         });
 
+        if (error) {
+          if (error.message && error.message.toLowerCase().includes('email not confirmed')) {
+            throw new Error('Your email is not confirmed yet. Please check your inbox or disable "Confirm Email" in Supabase Auth settings.');
+          }
+        }
+
         if (!error && data?.user) {
           const userName =
             data.user.user_metadata?.full_name ||
@@ -360,7 +366,11 @@ export function AuthProvider({ children }) {
           router.push('/dashboard');
           return data;
         }
-      } catch {}
+      } catch (e) {
+        if (e.message && e.message.includes('email is not confirmed')) {
+          throw e;
+        }
+      }
     }
 
     const res = await fetch('/api/auth/login', {
