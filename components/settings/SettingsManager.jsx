@@ -444,9 +444,9 @@ export function SettingsManager({ initialTab = 'account' }) {
                               <span>IP: {s.ipAddress}</span>
                             )}
                             <span>•</span>
-                            <span>Signed in: {new Date(s.createdAt).toLocaleDateString()}</span>
+                            <span>Signed in: {s.createdAt ? new Date(s.createdAt).toLocaleDateString() : 'Today'}</span>
                             <span>•</span>
-                            <span>Expires: {new Date(s.expiresAt).toLocaleDateString()}</span>
+                            <span>Expires: {s.expiresAt ? new Date(s.expiresAt).toLocaleDateString() : 'Active'}</span>
                           </div>
                         </div>
                       </div>
