@@ -68,18 +68,25 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
         // Decrypt items in memory
         const decrypted = {};
         for (const item of rawItems) {
-          try {
-            const parsedPayload = JSON.parse(item.encrypted_payload);
-            if (parsedPayload.data) {
-              decrypted[item.id] = parsedPayload.data;
-            } else if (parsedPayload.ciphertext && clientCryptoKey) {
-              const clear = await decryptClientVaultItem(parsedPayload, clientCryptoKey);
-              decrypted[item.id] = clear;
-            } else {
-              decrypted[item.id] = { title: `${item.type} Item (Encrypted)` };
+          if (item.decryptedPayload) {
+            decrypted[item.id] = item.decryptedPayload;
+          } else {
+            try {
+              const parsedPayload = typeof item.encrypted_payload === 'string'
+                ? JSON.parse(item.encrypted_payload)
+                : item.encrypted_payload;
+
+              if (parsedPayload?.data) {
+                decrypted[item.id] = parsedPayload.data;
+              } else if (parsedPayload?.ciphertext && clientCryptoKey) {
+                const clear = await decryptClientVaultItem(parsedPayload, clientCryptoKey);
+                decrypted[item.id] = clear;
+              } else {
+                decrypted[item.id] = { title: `${item.type} Item (Encrypted)` };
+              }
+            } catch (e) {
+              decrypted[item.id] = { title: `${item.type} Item` };
             }
-          } catch (e) {
-            decrypted[item.id] = { title: `${item.type} Item` };
           }
         }
         setDecryptedMap(decrypted);

@@ -33,9 +33,30 @@ export async function PATCH(request, { params }) {
     const body = await request.json();
     const { type, encryptedPayload } = body || {};
 
+    let finalPayloadToStore = encryptedPayload;
+    if (encryptedPayload) {
+      try {
+        const parsed = typeof encryptedPayload === 'string' ? JSON.parse(encryptedPayload) : encryptedPayload;
+        if (parsed.ciphertext && parsed.iv && parsed.authTag) {
+          finalPayloadToStore = typeof encryptedPayload === 'string' ? encryptedPayload : JSON.stringify(encryptedPayload);
+        } else if (parsed.data) {
+          const { encryptData } = await import('@/lib/crypto/encryption');
+          finalPayloadToStore = encryptData(parsed.data);
+        } else {
+          const { encryptData } = await import('@/lib/crypto/encryption');
+          finalPayloadToStore = encryptData(parsed);
+        }
+      } catch {
+        if (typeof encryptedPayload === 'string' && encryptedPayload.split(':').length !== 3) {
+          const { encryptData } = await import('@/lib/crypto/encryption');
+          finalPayloadToStore = encryptData(encryptedPayload);
+        }
+      }
+    }
+
     const updated = await updateVaultItem(id, authData.user.id, {
       type,
-      encryptedPayload,
+      encryptedPayload: finalPayloadToStore,
     });
 
     if (!updated) {
