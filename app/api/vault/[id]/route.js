@@ -4,6 +4,14 @@ import { getVaultItemById, updateVaultItem, deleteVaultItem } from '@/lib/db/vau
 import { logAuditEvent } from '@/lib/security/audit';
 import { getClientIp } from '@/lib/security/rate-limit';
 
+function extractUserToken(request) {
+  const authHeader = request.headers.get ? request.headers.get('authorization') : request.headers?.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.slice(7).trim();
+  }
+  return null;
+}
+
 export async function GET(request, { params }) {
   const authData = await getAuthenticatedUser(request);
   if (!authData) {
@@ -11,9 +19,10 @@ export async function GET(request, { params }) {
   }
 
   const { id } = await params;
+  const userToken = extractUserToken(request);
 
   // Strict ownership check
-  const item = await getVaultItemById(id, authData.user.id);
+  const item = await getVaultItemById(id, authData.user.id, userToken);
   if (!item) {
     return NextResponse.json({ error: 'Vault item not found' }, { status: 404 });
   }
@@ -28,6 +37,7 @@ export async function PATCH(request, { params }) {
   }
 
   const { id } = await params;
+  const userToken = extractUserToken(request);
 
   try {
     const body = await request.json();
@@ -54,10 +64,15 @@ export async function PATCH(request, { params }) {
       }
     }
 
-    const updated = await updateVaultItem(id, authData.user.id, {
-      type,
-      encryptedPayload: finalPayloadToStore,
-    });
+    const updated = await updateVaultItem(
+      id,
+      authData.user.id,
+      {
+        type,
+        encryptedPayload: finalPayloadToStore,
+      },
+      userToken
+    );
 
     if (!updated) {
       return NextResponse.json({ error: 'Vault item not found' }, { status: 404 });
@@ -86,8 +101,9 @@ export async function DELETE(request, { params }) {
   }
 
   const { id } = await params;
+  const userToken = extractUserToken(request);
 
-  const deleted = await deleteVaultItem(id, authData.user.id);
+  const deleted = await deleteVaultItem(id, authData.user.id, userToken);
   if (!deleted) {
     return NextResponse.json({ error: 'Vault item not found' }, { status: 404 });
   }

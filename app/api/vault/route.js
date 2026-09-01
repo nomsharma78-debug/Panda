@@ -5,17 +5,26 @@ import { logAuditEvent } from '@/lib/security/audit';
 import { getClientIp } from '@/lib/security/rate-limit';
 import { encryptData, decryptData } from '@/lib/crypto/encryption';
 
+function extractUserToken(request) {
+  const authHeader = request.headers.get ? request.headers.get('authorization') : request.headers?.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.slice(7).trim();
+  }
+  return null;
+}
+
 export async function GET(request) {
   const authData = await getAuthenticatedUser(request);
   if (!authData) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const userToken = extractUserToken(request);
   const { searchParams } = new URL(request.url);
   const type = searchParams.get('type') || null;
 
   try {
-    const items = await listVaultItems(authData.user.id, type);
+    const items = await listVaultItems(authData.user.id, type, userToken);
 
     const processedItems = items.map((item) => {
       let serverDecrypted = null;
@@ -46,6 +55,8 @@ export async function POST(request) {
   if (!authData) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const userToken = extractUserToken(request);
 
   try {
     const body = await request.json();
@@ -81,10 +92,14 @@ export async function POST(request) {
       }
     }
 
-    const item = await createVaultItem(authData.user.id, {
-      type: type.toLowerCase(),
-      encryptedPayload: finalPayloadToStore,
-    });
+    const item = await createVaultItem(
+      authData.user.id,
+      {
+        type: type.toLowerCase(),
+        encryptedPayload: finalPayloadToStore,
+      },
+      userToken
+    );
 
     const ip = getClientIp(request);
     await logAuditEvent({
