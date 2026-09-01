@@ -5,6 +5,14 @@ import { getMediaStats, getRecentMedia } from '@/lib/db/media';
 import { getCombinedStorageMetrics, listUserStorageConnections } from '@/lib/db/storage';
 import { listUserAuditLogs } from '@/lib/db/audit';
 
+function extractUserToken(request) {
+  const authHeader = request.headers.get ? request.headers.get('authorization') : request.headers?.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.slice(7).trim();
+  }
+  return null;
+}
+
 export async function GET(request) {
   const authData = await getAuthenticatedUser(request);
   if (!authData) {
@@ -12,15 +20,16 @@ export async function GET(request) {
   }
 
   const userId = authData.user.id;
+  const userToken = extractUserToken(request);
 
   try {
     const [vaultStats, mediaStats, storageMetrics, storageConnections, recentMedia, auditLogs] = await Promise.all([
-      getVaultStats(userId),
-      getMediaStats(userId),
-      getCombinedStorageMetrics(userId),
-      listUserStorageConnections(userId),
-      getRecentMedia(userId, 6),
-      listUserAuditLogs(userId, 8),
+      getVaultStats(userId, userToken),
+      getMediaStats(userId, userToken),
+      getCombinedStorageMetrics(userId, userToken),
+      listUserStorageConnections(userId, userToken),
+      getRecentMedia(userId, 6, userToken),
+      listUserAuditLogs(userId, 8, userToken),
     ]);
 
     return NextResponse.json({

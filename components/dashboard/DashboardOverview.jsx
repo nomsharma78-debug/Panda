@@ -30,7 +30,7 @@ export function DashboardOverview({
   onOpenAddVaultItem,
   onOpenAddStorage,
 }) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -38,10 +38,15 @@ export function DashboardOverview({
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/dashboard');
+      const headers = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const res = await fetch('/api/dashboard', { headers });
       if (res.ok) {
         const d = await res.json();
         setData(d);
@@ -51,11 +56,11 @@ export function DashboardOverview({
     } finally {
       setLoading(false);
     }
-  };
+  }, [session]);
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [fetchDashboardData]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
