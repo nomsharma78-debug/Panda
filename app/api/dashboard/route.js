@@ -22,28 +22,64 @@ export async function GET(request) {
   const userId = authData.user.id;
   const userToken = extractUserToken(request);
 
-  try {
-    const [vaultStats, mediaStats, storageMetrics, storageConnections, recentMedia, auditLogs] = await Promise.all([
-      getVaultStats(userId, userToken),
-      getMediaStats(userId, userToken),
-      getCombinedStorageMetrics(userId, userToken),
-      listUserStorageConnections(userId, userToken),
-      getRecentMedia(userId, 6, userToken),
-      listUserAuditLogs(userId, 8, userToken),
-    ]);
+  // Safe individual metric retrieval with independent fallbacks
+  let vaultStats = { login: 0, card: 0, note: 0, identity: 0, total: 0 };
+  let mediaStats = { images: 0, videos: 0, audio: 0, documents: 0, total: 0, totalBytes: 0 };
+  let storageMetrics = { totalBytes: 0, providerCount: 0, providers: [] };
+  let storageConnections = [];
+  let recentMedia = [];
+  let auditLogs = [];
 
-    return NextResponse.json({
-      vault: vaultStats,
-      media: mediaStats,
-      storage: {
-        ...storageMetrics,
-        connections: storageConnections,
-      },
-      recentMedia,
-      recentActivity: auditLogs,
-    });
-  } catch (err) {
-    console.error('Dashboard aggregation error:', err);
-    return NextResponse.json({ error: 'Failed to load dashboard data' }, { status: 500 });
+  try {
+    const v = await getVaultStats(userId, userToken);
+    if (v) vaultStats = v;
+  } catch (e) {
+    console.warn('[Dashboard API] vaultStats notice:', e.message);
   }
+
+  try {
+    const m = await getMediaStats(userId, userToken);
+    if (m) mediaStats = m;
+  } catch (e) {
+    console.warn('[Dashboard API] mediaStats notice:', e.message);
+  }
+
+  try {
+    const s = await getCombinedStorageMetrics(userId, userToken);
+    if (s) storageMetrics = s;
+  } catch (e) {
+    console.warn('[Dashboard API] storageMetrics notice:', e.message);
+  }
+
+  try {
+    const sc = await listUserStorageConnections(userId, userToken);
+    if (sc) storageConnections = sc;
+  } catch (e) {
+    console.warn('[Dashboard API] storageConnections notice:', e.message);
+  }
+
+  try {
+    const rm = await getRecentMedia(userId, 6, userToken);
+    if (rm) recentMedia = rm;
+  } catch (e) {
+    console.warn('[Dashboard API] recentMedia notice:', e.message);
+  }
+
+  try {
+    const al = await listUserAuditLogs(userId, 8, userToken);
+    if (al) auditLogs = al;
+  } catch (e) {
+    console.warn('[Dashboard API] auditLogs notice:', e.message);
+  }
+
+  return NextResponse.json({
+    vault: vaultStats,
+    media: mediaStats,
+    storage: {
+      ...storageMetrics,
+      connections: storageConnections,
+    },
+    recentMedia,
+    recentActivity: auditLogs,
+  });
 }

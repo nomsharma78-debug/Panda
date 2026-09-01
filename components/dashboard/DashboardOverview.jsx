@@ -46,11 +46,30 @@ export function DashboardOverview({
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const res = await fetch('/api/dashboard', { headers });
-      if (res.ok) {
-        const d = await res.json();
-        setData(d);
+      const [dashRes, vaultRes] = await Promise.allSettled([
+        fetch('/api/dashboard', { headers }),
+        fetch('/api/vault', { headers }),
+      ]);
+
+      let dashboardData = {};
+      if (dashRes.status === 'fulfilled' && dashRes.value.ok) {
+        dashboardData = await dashRes.value.json().catch(() => ({}));
       }
+
+      if (vaultRes.status === 'fulfilled' && vaultRes.value.ok) {
+        const vaultJson = await vaultRes.value.json().catch(() => ({}));
+        const rawItems = vaultJson.items || [];
+        const vaultStats = { login: 0, card: 0, note: 0, identity: 0, total: rawItems.length };
+        rawItems.forEach((item) => {
+          const t = (item.type || '').toLowerCase();
+          if (vaultStats[t] !== undefined) {
+            vaultStats[t]++;
+          }
+        });
+        dashboardData.vault = vaultStats;
+      }
+
+      setData(dashboardData);
     } catch (e) {
       console.error('Failed to load dashboard data:', e);
     } finally {
@@ -60,6 +79,12 @@ export function DashboardOverview({
 
   useEffect(() => {
     fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  useEffect(() => {
+    const handleVaultUpdated = () => fetchDashboardData();
+    window.addEventListener('panda:vault:updated', handleVaultUpdated);
+    return () => window.removeEventListener('panda:vault:updated', handleVaultUpdated);
   }, [fetchDashboardData]);
 
   const getGreeting = () => {
