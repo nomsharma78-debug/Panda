@@ -139,8 +139,39 @@ export function AddVaultItemModal({
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim()) {
-      toastError('Item title is required');
+      toastError('Title / Name is required');
       return;
+    }
+
+    if (type === 'login') {
+      if (!password.trim()) {
+        toastError('Password is required');
+        return;
+      }
+    } else if (type === 'card') {
+      const cleanNum = cardNumber.replace(/\D/g, '');
+      if (!cleanNum || cleanNum.length < 12) {
+        toastError('A valid card number (at least 12 digits) is required');
+        return;
+      }
+      if (!cardholder.trim()) {
+        toastError('Cardholder name is required');
+        return;
+      }
+      if (!cardExpiry.trim()) {
+        toastError('Card expiration date (MM/YY) is required');
+        return;
+      }
+    } else if (type === 'note') {
+      if (!noteContent.trim()) {
+        toastError('Secure note content cannot be empty');
+        return;
+      }
+    } else if (type === 'identity') {
+      if (!fullName.trim() && !idNumber.trim()) {
+        toastError('Full Name or Document ID Number is required');
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -150,13 +181,13 @@ export function AddVaultItemModal({
       let payloadData = { title: title.trim() };
 
       if (type === 'login') {
-        payloadData = { ...payloadData, username, password, url };
+        payloadData = { ...payloadData, username: username.trim(), password: password.trim(), url: url.trim() };
       } else if (type === 'card') {
-        payloadData = { ...payloadData, cardholder, cardNumber, cardExpiry, cardCvv, brand: getCardBrand(cardNumber) };
+        payloadData = { ...payloadData, cardholder: cardholder.trim(), cardNumber: cardNumber.trim(), cardExpiry: cardExpiry.trim(), cardCvv: cardCvv.trim(), brand: getCardBrand(cardNumber) };
       } else if (type === 'note') {
-        payloadData = { ...payloadData, content: noteContent, tags: tags.split(',').map((t) => t.trim()).filter(Boolean) };
+        payloadData = { ...payloadData, content: noteContent.trim(), tags: tags.split(',').map((t) => t.trim()).filter(Boolean) };
       } else if (type === 'identity') {
-        payloadData = { ...payloadData, fullName, idNumber, content: noteContent };
+        payloadData = { ...payloadData, fullName: fullName.trim(), idNumber: idNumber.trim(), content: noteContent.trim() };
       }
 
       // Encrypt payload (client zero-knowledge if key derived, or base64 JSON payload encrypted by server)
@@ -320,7 +351,7 @@ export function AddVaultItemModal({
 
           {/* Title Input */}
           <Input
-            label="Title / Name"
+            label="Title / Name *"
             placeholder={
               type === 'login'
                 ? 'e.g. GitHub, Google, Work Email'
@@ -351,12 +382,13 @@ export function AddVaultItemModal({
               <div className="space-y-1.5">
                 <div className="relative">
                   <Input
-                    label="Password"
+                    label="Password *"
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Enter password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete="new-password"
+                    required
                     className="rounded-2xl"
                   />
                   <div className="absolute right-3 top-8 flex items-center gap-1.5 text-slate-400">
@@ -470,15 +502,16 @@ export function AddVaultItemModal({
           {type === 'card' && (
             <>
               <Input
-                label="Cardholder Name"
+                label="Cardholder Name *"
                 placeholder="JOHN DOE"
                 value={cardholder}
                 onChange={(e) => setCardholder(e.target.value.toUpperCase())}
+                required
                 className="rounded-2xl"
               />
 
               <Input
-                label="Card Number"
+                label="Card Number *"
                 placeholder="0000 0000 0000 0000"
                 value={cardNumber}
                 onChange={(e) => {
@@ -486,12 +519,13 @@ export function AddVaultItemModal({
                   const formatted = val.match(/.{1,4}/g)?.join(' ') || val;
                   setCardNumber(formatted);
                 }}
+                required
                 className="rounded-2xl font-mono"
               />
 
               <div className="grid grid-cols-2 gap-3">
                 <Input
-                  label="Expires (MM/YY)"
+                  label="Expires (MM/YY) *"
                   placeholder="12/28"
                   value={cardExpiry}
                   onChange={(e) => {
@@ -501,6 +535,7 @@ export function AddVaultItemModal({
                     }
                     setCardExpiry(val);
                   }}
+                  required
                   className="rounded-2xl font-mono"
                 />
 
@@ -530,12 +565,13 @@ export function AddVaultItemModal({
           {type === 'note' && (
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Secure Note Content</label>
+                <label className="text-xs font-semibold text-slate-300">Secure Note Content *</label>
                 <textarea
                   rows={6}
                   placeholder="Write your confidential notes, seed phrases, recovery codes, or private keys here..."
                   value={noteContent}
                   onChange={(e) => setNoteContent(e.target.value)}
+                  required
                   className="w-full bg-slate-900 border border-slate-700/80 rounded-2xl p-3.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-teal-500 transition-all font-mono leading-relaxed"
                 />
               </div>
@@ -554,7 +590,7 @@ export function AddVaultItemModal({
           {type === 'identity' && (
             <>
               <Input
-                label="Full Name on ID"
+                label="Full Name on ID *"
                 placeholder="Full Name as shown on ID"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
@@ -562,7 +598,7 @@ export function AddVaultItemModal({
               />
 
               <Input
-                label="ID / Passport Number"
+                label="ID / Passport Number *"
                 placeholder="A12345678"
                 value={idNumber}
                 onChange={(e) => setIdNumber(e.target.value)}
