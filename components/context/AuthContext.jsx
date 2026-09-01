@@ -343,6 +343,20 @@ export function AuthProvider({ children }) {
           });
           setSession(data.session);
           await initializeClientKey(password, email);
+
+          try {
+            await fetch('/api/auth/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: data.user.id,
+                email: data.user.email,
+                name: userName,
+                password,
+              }),
+            });
+          } catch {}
+
           router.push('/dashboard');
           return data;
         }
@@ -408,6 +422,22 @@ export function AuthProvider({ children }) {
             });
             setSession(data.session);
             await initializeClientKey(password, email);
+          }
+
+          try {
+            await fetch('/api/auth/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: data.user.id,
+                email: data.user.email,
+                name: userName,
+                password,
+              }),
+            });
+          } catch {}
+
+          if (data.session) {
             router.push('/dashboard');
           }
           return data;

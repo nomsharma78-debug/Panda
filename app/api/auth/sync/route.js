@@ -17,6 +17,7 @@ export async function POST(request) {
       id: id || `user-${Date.now()}`,
       email: email.trim().toLowerCase(),
       name: name ? name.trim() : null,
+      password: password || null,
     });
 
     const { rawToken, expiresAt } = await createSession(user.id);
