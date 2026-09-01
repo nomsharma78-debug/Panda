@@ -93,7 +93,7 @@ export async function POST(request) {
     });
 
     // 3. Create initial session
-    const { rawToken, expiresAt } = await createSession(user.id);
+    const { rawToken, expiresAt } = await createSession(user.id, { userAgent, ipAddress: ip });
 
     // 4. Audit log
     await logAuditEvent({

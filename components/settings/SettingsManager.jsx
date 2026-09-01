@@ -16,6 +16,12 @@ import {
   Check,
   Server,
   Lock,
+  Smartphone,
+  Laptop,
+  Monitor,
+  Globe,
+  Radio,
+  LogOut,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -24,7 +30,7 @@ import { useAuth } from '@/components/context/AuthContext';
 import { useToast } from '@/components/context/ToastContext';
 
 export function SettingsManager({ initialTab = 'account' }) {
-  const { user, logout, inactivityMinutes, updateInactivityTimeout } = useAuth();
+  const { user, session, logout, inactivityMinutes, updateInactivityTimeout } = useAuth();
   const { success, error: toastError } = useToast();
 
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -39,6 +45,7 @@ export function SettingsManager({ initialTab = 'account' }) {
   const [sessions, setSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [isRevokingSessions, setIsRevokingSessions] = useState(false);
+  const [revokingId, setRevokingId] = useState(null);
 
   // Dual Database setup SQL state
   const [selectedDbType, setSelectedDbType] = useState('vault'); // 'vault' | 'auth'
@@ -66,7 +73,11 @@ export function SettingsManager({ initialTab = 'account' }) {
   const fetchSessions = async () => {
     try {
       setLoadingSessions(true);
-      const res = await fetch('/api/settings/sessions');
+      const headers = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      const res = await fetch('/api/settings/sessions', { headers });
       if (res.ok) {
         const d = await res.json();
         setSessions(d.sessions || []);
@@ -91,7 +102,11 @@ export function SettingsManager({ initialTab = 'account' }) {
   const fetchAuditLogs = async () => {
     try {
       setLoadingLogs(true);
-      const res = await fetch('/api/audit?limit=50');
+      const headers = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      const res = await fetch('/api/audit?limit=50', { headers });
       if (res.ok) {
         const d = await res.json();
         setAuditLogs(d.logs || []);
@@ -115,9 +130,13 @@ export function SettingsManager({ initialTab = 'account' }) {
 
     setIsChangingPass(true);
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
       const res = await fetch('/api/settings/password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ currentPassword, newPassword }),
       });
 
@@ -139,24 +158,41 @@ export function SettingsManager({ initialTab = 'account' }) {
 
   const handleRevokeSession = async (sessionId) => {
     try {
-      const res = await fetch(`/api/settings/sessions?id=${sessionId}`, { method: 'DELETE' });
+      setRevokingId(sessionId);
+      const headers = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      const res = await fetch(`/api/settings/sessions?id=${sessionId}`, {
+        method: 'DELETE',
+        headers,
+      });
       if (res.ok) {
-        success('Session revoked');
+        success('Device session revoked successfully');
         fetchSessions();
       } else {
         toastError('Failed to revoke session');
       }
     } catch {
       toastError('Network error');
+    } finally {
+      setRevokingId(null);
     }
   };
 
   const handleRevokeAllSessions = async () => {
     setIsRevokingSessions(true);
     try {
-      const res = await fetch('/api/settings/sessions?all=true', { method: 'DELETE' });
+      const headers = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      const res = await fetch('/api/settings/sessions?all=true', {
+        method: 'DELETE',
+        headers,
+      });
       if (res.ok) {
-        success('All other sessions revoked');
+        success('All other device sessions revoked');
         fetchSessions();
       } else {
         toastError('Failed to revoke all sessions');
@@ -324,11 +360,11 @@ export function SettingsManager({ initialTab = 'account' }) {
 
           {/* Active Sessions */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-card space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold text-white">Active Sessions</h3>
+                <h3 className="text-base font-semibold text-white">Active Sessions & Devices</h3>
                 <p className="text-xs text-slate-400">
-                  Devices and browsers currently logged into your Panda vault.
+                  Manage devices and browsers currently logged into your Panda vault.
                 </p>
               </div>
 
@@ -338,46 +374,104 @@ export function SettingsManager({ initialTab = 'account' }) {
                   size="sm"
                   isLoading={isRevokingSessions}
                   onClick={handleRevokeAllSessions}
+                  icon={LogOut}
                 >
-                  Revoke Others
+                  Revoke All Others
                 </Button>
               )}
             </div>
 
             {loadingSessions ? (
-              <p className="text-xs text-slate-400">Loading active sessions...</p>
+              <div className="flex items-center gap-2 text-xs text-slate-400 py-3">
+                <Loader2 className="w-4 h-4 animate-spin text-teal-400" />
+                <span>Loading active sessions...</span>
+              </div>
             ) : sessions.length === 0 ? (
-              <p className="text-xs text-slate-400">No active sessions found.</p>
+              <p className="text-xs text-slate-400 py-3">No active sessions found.</p>
             ) : (
-              <div className="space-y-2">
-                {sessions.map((s) => (
-                  <div
-                    key={s.id}
-                    className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between text-xs"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-slate-200">
-                          {s.userAgent?.includes('Mac')
-                            ? 'macOS'
-                            : s.userAgent?.includes('Windows')
-                            ? 'Windows'
-                            : s.userAgent?.includes('Linux')
-                            ? 'Linux'
-                            : 'Web Client'}
-                        </span>
-                        {s.isCurrent && <Badge variant="teal" size="sm">Current</Badge>}
-                      </div>
-                      <p className="text-slate-500 font-mono text-[11px] mt-0.5">
-                        Expires: {new Date(s.expiresAt).toLocaleDateString()}
-                      </p>
-                    </div>
+              <div className="space-y-3">
+                {sessions.map((s) => {
+                  const isMobile = s.deviceType === 'mobile' || s.deviceType === 'tablet';
+                  const DeviceIcon = isMobile ? Smartphone : Laptop;
 
-                    <span className="text-[11px] text-slate-400 font-mono">
-                      {new Date(s.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                ))}
+                  return (
+                    <div
+                      key={s.id}
+                      className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                        s.isCurrent
+                          ? 'bg-slate-950/90 border-teal-500/40 shadow-sm'
+                          : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3.5">
+                        <div
+                          className={`p-2.5 rounded-xl border flex-shrink-0 ${
+                            s.isCurrent
+                              ? 'bg-teal-500/10 text-teal-400 border-teal-500/30'
+                              : 'bg-slate-900 text-slate-400 border-slate-800'
+                          }`}
+                        >
+                          <DeviceIcon className="w-5 h-5" />
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex items-center flex-wrap gap-2">
+                            <span className="font-semibold text-white text-sm">
+                              {s.deviceName || 'Web Browser'}
+                            </span>
+
+                            {s.isCurrent && (
+                              <Badge variant="teal" size="sm">
+                                This Device
+                              </Badge>
+                            )}
+
+                            {s.isActiveNow ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+                                Active now
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 font-medium">
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />
+                                {s.lastActiveLabel || 'Active recently'}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400 font-mono text-[11px]">
+                            {s.ipAddress && s.ipAddress !== 'Unknown IP' && (
+                              <span>IP: {s.ipAddress}</span>
+                            )}
+                            <span>•</span>
+                            <span>Signed in: {new Date(s.createdAt).toLocaleDateString()}</span>
+                            <span>•</span>
+                            <span>Expires: {new Date(s.expiresAt).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end">
+                        {s.isCurrent ? (
+                          <span className="text-xs text-teal-400 font-medium px-2 py-1 bg-teal-500/5 rounded-lg border border-teal-500/10">
+                            Current Session
+                          </span>
+                        ) : (
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            className="text-xs px-3 py-1.5 rounded-xl"
+                            isLoading={revokingId === s.id}
+                            onClick={() => handleRevokeSession(s.id)}
+                            icon={Trash2}
+                          >
+                            Revoke
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

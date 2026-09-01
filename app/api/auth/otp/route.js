@@ -118,7 +118,8 @@ export async function POST(request) {
       });
 
       // Create session cookie
-      const { rawToken, expiresAt } = await createSession(user.id);
+      const userAgent = request.headers.get('user-agent') || '';
+      const { rawToken, expiresAt } = await createSession(user.id, { userAgent, ipAddress: ip });
       const response = NextResponse.json({
         success: true,
         user: { id: user.id, email: user.email, name: user.name },

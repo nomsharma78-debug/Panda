@@ -55,7 +55,7 @@ export async function POST(request) {
             });
 
             // Create session
-            const { rawToken, expiresAt } = await createSession(data.user.id);
+            const { rawToken, expiresAt } = await createSession(data.user.id, { userAgent, ipAddress: ip });
 
             await logAuditEvent({
               userId: data.user.id,
@@ -120,7 +120,7 @@ export async function POST(request) {
     }
 
     // Create session
-    const { rawToken, expiresAt } = await createSession(user.id);
+    const { rawToken, expiresAt } = await createSession(user.id, { userAgent, ipAddress: ip });
 
     // Audit log
     await logAuditEvent({
