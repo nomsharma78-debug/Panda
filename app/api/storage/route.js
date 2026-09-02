@@ -96,6 +96,6 @@ export async function POST(request) {
     );
   } catch (err) {
     console.error('Save storage connection error:', err);
-    return NextResponse.json({ error: 'Failed to connect storage provider' }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Failed to connect storage provider' }, { status: 500 });
   }
 }
