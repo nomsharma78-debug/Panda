@@ -1,16 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Play,
   FileText,
-  Download,
-  Trash2,
-  Eye,
   Check,
   Film,
   File,
   Lock,
+  ImageOff,
 } from 'lucide-react';
 import { formatBytes } from '@/components/ui/Progress';
 import { useAuth } from '@/components/context/AuthContext';
@@ -26,15 +24,70 @@ export function MediaCard({
 }) {
   const { session } = useAuth();
   const targetMedia = media || item || {};
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [imgLoading, setImgLoading] = useState(true);
   const [imgError, setImgError] = useState(false);
-  const tokenParam = session?.access_token ? `?token=${encodeURIComponent(session.access_token)}` : '';
-  const accessUrl = targetMedia.id ? `/api/media/${targetMedia.id}/access${tokenParam}` : '';
-  const downloadUrl = targetMedia.id ? `/api/media/${targetMedia.id}/download${tokenParam}` : '';
+  const prevBlobRef = useRef(null);
 
   const isPhoto = targetMedia.media_type === 'photo';
   const isVideo = targetMedia.media_type === 'video';
   const isPdf = targetMedia.media_type === 'pdf';
-  const isDoc = targetMedia.media_type === 'document';
+
+  // Build access URL with token for authenticated fetch
+  const tokenParam = session?.access_token ? `?token=${encodeURIComponent(session.access_token)}` : '';
+  const accessUrl = targetMedia.id ? `/api/media/${targetMedia.id}/access${tokenParam}` : '';
+  const downloadUrl = targetMedia.id ? `/api/media/${targetMedia.id}/download${tokenParam}` : '';
+
+  // Fetch photo as blob so thumbnail displays stably without repeated auth re-requests
+  useEffect(() => {
+    if (!isPhoto || !targetMedia.id || !session?.access_token) {
+      setBlobUrl(null);
+      setImgLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setImgLoading(true);
+    setImgError(false);
+
+    fetch(accessUrl)
+      .then((res) => {
+        if (!res.ok) throw new Error('Fetch failed');
+        return res.blob();
+      })
+      .then((blob) => {
+        if (!cancelled) {
+          const url = URL.createObjectURL(blob);
+          // Revoke old blob URL before setting new one
+          if (prevBlobRef.current) {
+            URL.revokeObjectURL(prevBlobRef.current);
+          }
+          prevBlobRef.current = url;
+          setBlobUrl(url);
+          setImgLoading(false);
+          setImgError(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setImgError(true);
+          setImgLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [targetMedia.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cleanup blob URL on unmount
+  useEffect(() => {
+    return () => {
+      if (prevBlobRef.current) {
+        URL.revokeObjectURL(prevBlobRef.current);
+      }
+    };
+  }, []);
 
   const timeStr = targetMedia.uploaded_at
     ? new Date(targetMedia.uploaded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -51,14 +104,26 @@ export function MediaCard({
     >
       {/* Media Thumbnail Container */}
       <div className="relative aspect-square w-full bg-slate-950 flex items-center justify-center overflow-hidden">
-        {isPhoto && !imgError ? (
-          <img
-            src={accessUrl}
-            alt={targetMedia.original_filename || 'Photo'}
-            onError={() => setImgError(true)}
-            loading="lazy"
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
+        {isPhoto ? (
+          imgLoading ? (
+            <div className="w-full h-full flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full border-2 border-teal-500/40 border-t-teal-500 animate-spin" />
+            </div>
+          ) : imgError || !blobUrl ? (
+            <div className="flex flex-col items-center justify-center gap-2 p-4 text-center">
+              <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 text-slate-500 flex items-center justify-center">
+                <ImageOff className="w-6 h-6" />
+              </div>
+              <span className="text-[10px] text-slate-500 font-mono">Could not load</span>
+            </div>
+          ) : (
+            <img
+              src={blobUrl}
+              alt={targetMedia.original_filename || 'Photo'}
+              loading="lazy"
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
+          )
         ) : isVideo ? (
           <div className="relative w-full h-full flex items-center justify-center bg-slate-900/90 group-hover:bg-slate-900 transition-colors">
             <video

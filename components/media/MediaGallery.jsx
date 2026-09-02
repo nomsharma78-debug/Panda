@@ -571,7 +571,8 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         isOpen={lightboxOpen}
         onClose={() => setLightboxOpen(false)}
         mediaList={mediaList}
-        initialIndex={lightboxIndex}
+        currentIndex={lightboxIndex}
+        onIndexChange={(idx) => setLightboxIndex(idx)}
         onDelete={(item) => setDeleteTarget(item)}
       />
 

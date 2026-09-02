@@ -19,7 +19,7 @@ export async function GET(request, { params }) {
         'Content-Type': mimeType,
         'Content-Length': String(size),
         'Content-Disposition': `inline; filename="${encodeURIComponent(filename)}"`,
-        'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+        'Cache-Control': 'private, max-age=300',
         'X-Content-Type-Options': 'nosniff',
       },
     });

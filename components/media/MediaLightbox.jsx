@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X,
   ChevronLeft,
@@ -15,65 +15,129 @@ import {
   FileText,
   HardDrive,
   Calendar,
+  Loader2,
+  ImageOff,
 } from 'lucide-react';
 import { VideoPlayer } from './VideoPlayer';
 import { formatBytes } from '@/components/ui/Progress';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/components/context/AuthContext';
 
 export function MediaLightbox({
   mediaList = [],
-  currentIndex = 0,
+  currentIndex: initialIndex = 0,
   isOpen,
   onClose,
   onIndexChange,
   onDelete,
 }) {
+  const { session } = useAuth();
+
+  // Lightbox manages its own internal index so navigation is instant
+  const [internalIndex, setInternalIndex] = useState(initialIndex);
   const [zoom, setZoom] = useState(1);
   const [showInfo, setShowInfo] = useState(false);
 
-  const currentItem = mediaList[currentIndex] || null;
+  // Blob loading state for current photo
+  const [photoBlobUrl, setPhotoBlobUrl] = useState(null);
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [photoError, setPhotoError] = useState(false);
+  const prevBlobRef = useRef(null);
 
-  // Reset zoom on index change
+  // Sync internal index when prop changes (e.g. user clicks different card)
+  useEffect(() => {
+    setInternalIndex(initialIndex);
+  }, [initialIndex]);
+
+  const currentItem = mediaList[internalIndex] || null;
+
+  // Reset zoom when item changes
   useEffect(() => {
     setZoom(1);
-  }, [currentIndex]);
+    setShowInfo(false);
+  }, [internalIndex]);
 
-  const handlePrev = useCallback(() => {
-    if (currentIndex > 0 && onIndexChange) {
-      onIndexChange(currentIndex - 1);
+  // Fetch image as blob when item changes
+  useEffect(() => {
+    if (!isOpen || !currentItem || currentItem.media_type !== 'photo' || !session?.access_token) {
+      setPhotoBlobUrl(null);
+      setPhotoLoading(false);
+      setPhotoError(false);
+      return;
     }
-  }, [currentIndex, onIndexChange]);
 
-  const handleNext = useCallback(() => {
-    if (currentIndex < mediaList.length - 1 && onIndexChange) {
-      onIndexChange(currentIndex + 1);
+    let cancelled = false;
+    setPhotoLoading(true);
+    setPhotoError(false);
+    setPhotoBlobUrl(null);
+
+    const tokenParam = `?token=${encodeURIComponent(session.access_token)}`;
+    const url = `/api/media/${currentItem.id}/access${tokenParam}`;
+
+    fetch(url)
+      .then((res) => {
+        if (!res.ok) throw new Error('Unauthorized');
+        return res.blob();
+      })
+      .then((blob) => {
+        if (!cancelled) {
+          const objectUrl = URL.createObjectURL(blob);
+          if (prevBlobRef.current) URL.revokeObjectURL(prevBlobRef.current);
+          prevBlobRef.current = objectUrl;
+          setPhotoBlobUrl(objectUrl);
+          setPhotoLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPhotoError(true);
+          setPhotoLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, currentItem?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Revoke blob on unmount or close
+  useEffect(() => {
+    return () => {
+      if (prevBlobRef.current) {
+        URL.revokeObjectURL(prevBlobRef.current);
+        prevBlobRef.current = null;
+      }
+    };
+  }, []);
+
+  const goTo = useCallback((idx) => {
+    if (idx >= 0 && idx < mediaList.length) {
+      setInternalIndex(idx);
+      if (onIndexChange) onIndexChange(idx);
     }
-  }, [currentIndex, mediaList.length, onIndexChange]);
+  }, [mediaList.length, onIndexChange]);
+
+  const handlePrev = useCallback(() => goTo(internalIndex - 1), [internalIndex, goTo]);
+  const handleNext = useCallback(() => goTo(internalIndex + 1), [internalIndex, goTo]);
 
   // Keyboard navigation
   useEffect(() => {
     if (!isOpen) return;
-
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') onClose();
       if (e.key === 'ArrowLeft') handlePrev();
       if (e.key === 'ArrowRight') handleNext();
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose, handlePrev, handleNext]);
 
-  const { session } = useAuth();
   if (!isOpen || !currentItem) return null;
 
   const tokenParam = session?.access_token ? `?token=${encodeURIComponent(session.access_token)}` : '';
-  const accessUrl = `/api/media/${currentItem.id}/access${tokenParam}`;
   const downloadUrl = `/api/media/${currentItem.id}/download${tokenParam}`;
+  const videoUrl = `/api/media/${currentItem.id}/access${tokenParam}`;
 
-  // Localized date formatting in user's local timezone
   const formattedDate = currentItem.uploaded_at
     ? new Date(currentItem.uploaded_at).toLocaleString(undefined, {
         dateStyle: 'medium',
@@ -90,7 +154,7 @@ export function MediaLightbox({
             {currentItem.original_filename}
           </span>
           <span className="text-xs text-slate-400 font-mono">
-            {currentIndex + 1} / {mediaList.length}
+            {internalIndex + 1} / {mediaList.length}
           </span>
         </div>
 
@@ -168,7 +232,7 @@ export function MediaLightbox({
       {/* Main Preview Container */}
       <div className="relative w-full h-full flex items-center justify-center p-4 sm:p-12 overflow-hidden">
         {/* Navigation Previous */}
-        {currentIndex > 0 && (
+        {internalIndex > 0 && (
           <button
             onClick={handlePrev}
             className="absolute left-4 z-20 p-3 rounded-full bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700/80 shadow-lg hover:scale-105 transition-all"
@@ -181,16 +245,32 @@ export function MediaLightbox({
         {/* Content Viewer */}
         <div className="max-w-5xl max-h-[80vh] flex items-center justify-center overflow-auto">
           {currentItem.media_type === 'photo' && (
-            <img
-              src={accessUrl}
-              alt={currentItem.original_filename}
-              style={{ transform: `scale(${zoom})`, transition: 'transform 0.15s ease-out' }}
-              className="max-h-[75vh] max-w-full object-contain rounded-lg shadow-2xl"
-            />
+            <>
+              {photoLoading && (
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="w-10 h-10 text-teal-400 animate-spin" />
+                  <span className="text-sm text-slate-400">Decrypting & loading…</span>
+                </div>
+              )}
+              {photoError && !photoLoading && (
+                <div className="flex flex-col items-center gap-3">
+                  <ImageOff className="w-12 h-12 text-slate-500" />
+                  <span className="text-sm text-slate-400">Could not load image</span>
+                </div>
+              )}
+              {photoBlobUrl && !photoLoading && !photoError && (
+                <img
+                  src={photoBlobUrl}
+                  alt={currentItem.original_filename}
+                  style={{ transform: `scale(${zoom})`, transition: 'transform 0.15s ease-out' }}
+                  className="max-h-[75vh] max-w-full object-contain rounded-lg shadow-2xl"
+                />
+              )}
+            </>
           )}
 
           {currentItem.media_type === 'video' && (
-            <VideoPlayer src={accessUrl} mimeType={currentItem.mime_type} autoPlay />
+            <VideoPlayer src={videoUrl} mimeType={currentItem.mime_type} autoPlay />
           )}
 
           {(currentItem.media_type === 'pdf' || currentItem.media_type === 'document') && (
@@ -204,7 +284,7 @@ export function MediaLightbox({
               </p>
               <div className="flex items-center gap-3">
                 <a
-                  href={accessUrl}
+                  href={downloadUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-slate-800 hover:bg-slate-700 text-white border border-slate-700"
@@ -223,7 +303,7 @@ export function MediaLightbox({
             </div>
           )}
 
-          {currentItem.media_type === 'archive' || currentItem.media_type === 'other' && (
+          {(currentItem.media_type === 'archive' || currentItem.media_type === 'other') && (
             <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-8 flex flex-col items-center text-center shadow-2xl">
               <FileText className="w-12 h-12 text-slate-400 mb-4" />
               <h3 className="text-base font-semibold text-white mb-1">{currentItem.original_filename}</h3>
@@ -241,7 +321,7 @@ export function MediaLightbox({
         </div>
 
         {/* Navigation Next */}
-        {currentIndex < mediaList.length - 1 && (
+        {internalIndex < mediaList.length - 1 && (
           <button
             onClick={handleNext}
             className="absolute right-4 z-20 p-3 rounded-full bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700/80 shadow-lg hover:scale-105 transition-all"
