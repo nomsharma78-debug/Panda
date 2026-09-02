@@ -491,51 +491,20 @@ export function AddStorageModal({ isOpen, onClose, onStorageAdded }) {
           {/* Test Feedback */}
           {testResult && (
             <div
-              className={`p-4 rounded-2xl border text-xs animate-slide-up space-y-2.5 ${
+              className={`p-4 rounded-2xl border text-xs animate-slide-up ${
                 testResult.success
                   ? 'bg-teal-500/10 border-teal-500/30 text-teal-300'
                   : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
               }`}
             >
-              <div className="flex items-start gap-2.5">
+              <div className="flex items-center gap-2.5">
                 {testResult.success ? (
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-teal-400 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-teal-400" />
                 ) : (
-                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
                 )}
                 <span className="font-semibold">{testResult.message || testResult.error}</span>
               </div>
-
-              {testResult.checks && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800/80 text-[11px]">
-                  <div className="flex items-center gap-1.5">
-                    <span className={testResult.checks.endpoint ? 'text-teal-400 font-bold' : 'text-slate-500'}>
-                      {testResult.checks.endpoint ? '✓' : '✗'}
-                    </span>
-                    <span className="text-slate-300">Endpoint</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className={testResult.checks.credentials ? 'text-teal-400 font-bold' : 'text-slate-500'}>
-                      {testResult.checks.credentials ? '✓' : '✗'}
-                    </span>
-                    <span className="text-slate-300">Credentials</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className={testResult.checks.write ? 'text-teal-400 font-bold' : 'text-slate-500'}>
-                      {testResult.checks.write ? '✓' : '✗'}
-                    </span>
-                    <span className="text-slate-300">Live Write/Read</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className={testResult.checks.cors ? 'text-teal-400 font-bold' : 'text-amber-400 font-bold'}>
-                      {testResult.checks.cors ? '✓' : '⚠️'}
-                    </span>
-                    <span className={testResult.checks.cors ? 'text-slate-300' : 'text-amber-300'}>
-                      {testResult.checks.cors ? 'CORS Enabled' : 'CORS Missing'}
-                    </span>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
