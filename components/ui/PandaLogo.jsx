@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 
 /**
  * Panda Brand Logo & Wordmark
- * Premium cyber-shield panda vault mark with unified vector & image fallback.
+ * Premium cyber-shield panda vault mark.
  */
 export function PandaLogo({
   className = 'w-9 h-9',
@@ -14,48 +14,35 @@ export function PandaLogo({
   return (
     <div className="flex items-center gap-3 select-none">
       <div
-        className={`relative flex items-center justify-center rounded-2xl bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border border-teal-500/30 shadow-glow-teal p-1 overflow-hidden shrink-0 ${className}`}
+        className={`relative flex items-center justify-center rounded-2xl bg-slate-900 border border-white/10 shadow-[0_4px_16px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.15)] overflow-hidden shrink-0 ${className}`}
       >
         {!imageError ? (
           <img
             src="/icon.jpg"
-            alt="Panda Vault Logo"
+            alt="Panda Vault"
             className="w-full h-full object-cover rounded-xl"
             onError={() => setImageError(true)}
           />
         ) : (
-          /* Unified Vector SVG Cyber Shield Logo */
+          /* Fallback Cyber Shield SVG */
           <svg
             viewBox="0 0 48 48"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
-            className="w-full h-full"
+            className="w-full h-full p-1"
           >
-            {/* Cyber Shield */}
             <path
               d="M24 6 L8 12 V24 C8 33 15 39 24 42 C33 39 40 33 40 24 V12 L24 6 Z"
-              fill="#0f172a"
-              stroke="#14b8a6"
+              fill="#0e1118"
+              stroke="#2dd4bf"
               strokeWidth="2"
             />
-            {/* Ears */}
-            <circle cx="15" cy="13" r="3.5" fill="#14b8a6" />
-            <circle cx="33" cy="13" r="3.5" fill="#14b8a6" />
-            {/* Panda Face Base */}
-            <path
-              d="M13 22 C13 16 18 13 24 13 C30 13 35 16 35 22 C35 28 30 32 24 32 C18 32 13 28 13 22 Z"
-              fill="#1e293b"
-              stroke="#38bdf8"
-              strokeWidth="1.5"
-            />
-            {/* Eyes */}
-            <ellipse cx="18" cy="21" rx="2.5" ry="2" transform="rotate(-15 18 21)" fill="#0f172a" stroke="#14b8a6" strokeWidth="1" />
-            <circle cx="18" cy="21" r="1" fill="#38bdf8" />
-            <ellipse cx="30" cy="21" rx="2.5" ry="2" transform="rotate(15 30 21)" fill="#0f172a" stroke="#14b8a6" strokeWidth="1" />
-            <circle cx="30" cy="21" r="1" fill="#38bdf8" />
-            {/* Keyhole Dial Core */}
-            <circle cx="24" cy="25" r="4" fill="#020617" stroke="#38bdf8" strokeWidth="1.5" />
-            <path d="M22.5 23.5 H25.5 V26 L26 27 H22 L22.5 26 Z" fill="#14b8a6" />
+            <circle cx="16" cy="15" r="3.5" fill="#2dd4bf" />
+            <circle cx="32" cy="15" r="3.5" fill="#2dd4bf" />
+            <circle cx="24" cy="25" r="8" fill="#131722" stroke="#2dd4bf" strokeWidth="1.5" />
+            <circle cx="20" cy="23" r="1.5" fill="#5eead4" />
+            <circle cx="28" cy="23" r="1.5" fill="#5eead4" />
+            <path d="M22 28 C23 29.5 25 29.5 26 28" stroke="#2dd4bf" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         )}
       </div>
@@ -70,12 +57,12 @@ export function PandaLogo({
             >
               Panda
             </span>
-            <span className="text-[10px] uppercase font-mono tracking-widest px-1.5 py-0.5 rounded-lg bg-teal-500/10 border border-teal-500/30 text-teal-400 font-semibold">
+            <span className="text-[10px] uppercase font-mono tracking-widest px-1.5 py-0.5 rounded-md bg-teal-500/10 border border-teal-500/25 text-teal-300 font-semibold shadow-subtle">
               Vault
             </span>
           </div>
           <span className="text-[11px] text-slate-400 font-medium tracking-tight">
-            Your private digital space
+            Encrypted Digital Space
           </span>
         </div>
       )}
