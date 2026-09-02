@@ -68,7 +68,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const updateInactivityTimeout = (minutes) => {
-    const mins = Math.max(0, parseInt(minutes, 10) || 0);
+    const mins = Math.max(1, parseInt(minutes, 10) || 15);
     setInactivityMinutesState(mins);
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
@@ -76,6 +76,17 @@ export function AuthProvider({ children }) {
       } catch {}
     }
     lastActivityRef.current = Date.now();
+
+    // Persist to database across all user devices
+    const headers = { 'Content-Type': 'application/json' };
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+    fetch('/api/settings/inactivity', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ minutes: mins }),
+    }).catch(() => {});
   };
 
   /**
@@ -104,6 +115,21 @@ export function AuthProvider({ children }) {
           });
           setLoading(false);
 
+          // Fetch account inactivity preference from DB in background
+          fetch('/api/settings/inactivity', {
+            headers: { Authorization: `Bearer ${fastSession.access_token}` },
+          })
+            .then((r) => r.json())
+            .then((d) => {
+              if (d?.inactivityMinutes) {
+                setInactivityMinutesState(d.inactivityMinutes);
+                try {
+                  window.localStorage?.setItem(INACTIVITY_STORAGE_KEY, d.inactivityMinutes.toString());
+                } catch {}
+              }
+            })
+            .catch(() => {});
+
           // 2. Background verification with live database server
           supabase.auth.getUser().then(({ data, error }) => {
             if (error || !data?.user) {
@@ -127,6 +153,9 @@ export function AuthProvider({ children }) {
         if (data.authenticated && data.user) {
           setUser(data.user);
           setSession({ user: data.user });
+          if (data.user?.inactivity_timeout_minutes) {
+            setInactivityMinutesState(data.user.inactivity_timeout_minutes);
+          }
         } else {
           setUser(null);
           setSession(null);
@@ -141,7 +170,7 @@ export function AuthProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [session?.access_token]);
 
   useEffect(() => {
     checkAuth();

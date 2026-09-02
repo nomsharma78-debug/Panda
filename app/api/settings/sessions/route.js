@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/auth/session';
-import { listUserSessions, revokeSessionById, revokeAllUserSessions } from '@/lib/db/sessions';
+import { listUserSessions, recordDeviceSession, revokeSessionById, revokeAllUserSessions } from '@/lib/db/sessions';
 import { logAuditEvent } from '@/lib/security/audit';
 import { getClientIp } from '@/lib/security/rate-limit';
 import { parseUserAgent, formatRelativeActivity } from '@/lib/utils/device';
@@ -14,10 +14,15 @@ export async function GET(request) {
   const currentUserAgent = request.headers.get('user-agent') || '';
   const currentIp = getClientIp(request);
 
+  // Guarantee current device session is recorded/updated with active timestamp
+  await recordDeviceSession(authData.user.id, {
+    userAgent: currentUserAgent,
+    ipAddress: currentIp,
+  }).catch(() => {});
+
   try {
     const rawSessions = await listUserSessions(authData.user.id);
 
-    // If no sessions recorded yet (or using Supabase Auth JWT), make sure current device is shown
     let sessions = rawSessions;
     if (!sessions || sessions.length === 0) {
       sessions = [
@@ -33,10 +38,20 @@ export async function GET(request) {
       ];
     }
 
+    let foundCurrent = false;
+
     const formatted = sessions.map((s) => {
       const parsed = parseUserAgent(s.user_agent || currentUserAgent);
       const activity = formatRelativeActivity(s.last_active_at || s.created_at);
-      const isCurrent = s.id === authData.session.id || sessions.length === 1;
+
+      // Check if this session represents the currently connected device
+      let isCurrent = false;
+      if (!foundCurrent) {
+        if (s.id === authData.session.id || (s.user_agent && currentUserAgent && s.user_agent === currentUserAgent)) {
+          isCurrent = true;
+          foundCurrent = true;
+        }
+      }
 
       return {
         id: s.id,
@@ -54,7 +69,14 @@ export async function GET(request) {
       };
     });
 
-    // Ensure current session appears first
+    // If none matched, mark first as current
+    if (!foundCurrent && formatted.length > 0) {
+      formatted[0].isCurrent = true;
+      formatted[0].isActiveNow = true;
+      formatted[0].lastActiveLabel = 'Active now';
+    }
+
+    // Ensure current device session appears first
     formatted.sort((a, b) => (b.isCurrent ? 1 : 0) - (a.isCurrent ? 1 : 0));
 
     return NextResponse.json({ sessions: formatted });

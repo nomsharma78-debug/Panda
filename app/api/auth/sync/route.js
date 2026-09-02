@@ -20,7 +20,11 @@ export async function POST(request) {
       password: password || null,
     });
 
-    const { rawToken, expiresAt } = await createSession(user.id);
+    const userAgent = request.headers.get('user-agent') || '';
+    const { getClientIp } = await import('@/lib/security/rate-limit');
+    const ipAddress = getClientIp(request);
+
+    const { rawToken, expiresAt } = await createSession(user.id, { userAgent, ipAddress });
     const response = NextResponse.json({
       success: true,
       user,
