@@ -7,6 +7,7 @@ import { deriveClientKey } from '@/lib/crypto/client-vault';
 
 const DEFAULT_INACTIVITY_MINUTES = 15;
 const INACTIVITY_STORAGE_KEY = 'panda_inactivity_minutes';
+const LAST_ACTIVITY_STORAGE_KEY = 'panda_last_activity_timestamp';
 
 const AuthContext = createContext({
   user: null,
@@ -29,6 +30,7 @@ const AuthContext = createContext({
 function purgeLocalAuthStorage() {
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
+      window.localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY);
       const keysToRemove = [];
       for (let i = 0; i < window.localStorage.length; i++) {
         const key = window.localStorage.key(i);
@@ -263,30 +265,84 @@ export function AuthProvider({ children }) {
   }, [user, session?.access_token, router]);
 
   /**
-   * Automatic Inactivity Detector & Logout Timer
+   * Automatic Inactivity Detector & Persistent Logout Timer
+   * Works across app closures, backgrounding, sleep, and mobile screens.
    */
   useEffect(() => {
     if (!user || inactivityMinutes <= 0) return;
 
-    lastActivityRef.current = Date.now();
     const timeoutMs = inactivityMinutes * 60 * 1000;
 
+    // Initialize or load persisted last activity timestamp
+    let persisted = null;
+    try {
+      persisted = window.localStorage?.getItem(LAST_ACTIVITY_STORAGE_KEY);
+    } catch {}
+
+    const now = Date.now();
+    if (persisted) {
+      const lastTs = parseInt(persisted, 10);
+      if (!isNaN(lastTs) && now - lastTs >= timeoutMs) {
+        // Was inactive while browser was closed or tab was sleeping in background!
+        logout(true);
+        return;
+      }
+      lastActivityRef.current = lastTs;
+    } else {
+      lastActivityRef.current = now;
+      try {
+        window.localStorage?.setItem(LAST_ACTIVITY_STORAGE_KEY, now.toString());
+      } catch {}
+    }
+
+    let lastWriteTime = 0;
     const recordActivity = () => {
-      lastActivityRef.current = Date.now();
+      const currentNow = Date.now();
+      lastActivityRef.current = currentNow;
+      // Throttle localStorage writes to once every 10 seconds
+      if (currentNow - lastWriteTime > 10000) {
+        lastWriteTime = currentNow;
+        try {
+          window.localStorage?.setItem(LAST_ACTIVITY_STORAGE_KEY, currentNow.toString());
+        } catch {}
+      }
     };
 
-    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    const checkInactivity = () => {
+      let checkTs = lastActivityRef.current;
+      try {
+        const stored = window.localStorage?.getItem(LAST_ACTIVITY_STORAGE_KEY);
+        if (stored) {
+          const parsed = parseInt(stored, 10);
+          if (!isNaN(parsed)) checkTs = parsed;
+        }
+      } catch {}
+
+      const idleTime = Date.now() - checkTs;
+      if (idleTime >= timeoutMs) {
+        logout(true); // Automatically logout
+      }
+    };
+
+    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click', 'pointerdown'];
     events.forEach((ev) => window.addEventListener(ev, recordActivity, { passive: true }));
 
-    const checkInterval = setInterval(() => {
-      const idleTime = Date.now() - lastActivityRef.current;
-      if (idleTime >= timeoutMs) {
-        logout(true); // Logout with inactivity flag
+    // Immediate check when waking up or switching tabs
+    const handleWakeOrFocus = () => {
+      checkInactivity();
+    };
+    window.addEventListener('focus', handleWakeOrFocus);
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        checkInactivity();
       }
-    }, 5000);
+    });
+
+    const checkInterval = setInterval(checkInactivity, 5000);
 
     return () => {
       events.forEach((ev) => window.removeEventListener(ev, recordActivity));
+      window.removeEventListener('focus', handleWakeOrFocus);
       clearInterval(checkInterval);
     };
   }, [user, inactivityMinutes]);

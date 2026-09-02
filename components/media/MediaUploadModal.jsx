@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { Upload, HardDrive, ShieldCheck, CheckCircle2, AlertCircle, FileText, X, Plus, Cloud, Folder } from 'lucide-react';
+import { Upload, HardDrive, ShieldCheck, CheckCircle2, AlertCircle, FileText, X, Plus, Cloud, Folder, Loader2 } from 'lucide-react';
 import { Progress, formatBytes } from '@/components/ui/Progress';
 import { useToast } from '@/components/context/ToastContext';
 import { useAuth } from '@/components/context/AuthContext';
@@ -30,32 +30,42 @@ export function MediaUploadModal({
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const [uploadError, setUploadError] = useState(null);
 
+  const [isLoadingStorage, setIsLoadingStorage] = useState(true);
+
   // Fetch available storage connections and folders
   useEffect(() => {
     if (isOpen) {
+      setIsLoadingStorage(true);
       setSelectedFolder(initialFolderId || 'root');
 
-      // 1. Fetch Storage connections
-      fetch('/api/storage')
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.connections) {
-            setStorageProviders(data.connections);
-          }
-        })
-        .catch(() => {});
+      const headers = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
 
-      // 2. Fetch User Folders
-      fetch('/api/media/folders')
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.folders) {
-            setFolders(data.folders);
+      // Parallel fetch with authorization
+      Promise.allSettled([
+        fetch('/api/storage', { headers }).then((res) => res.json()),
+        fetch('/api/media/folders', { headers }).then((res) => res.json()),
+      ])
+        .then(([storageResult, foldersResult]) => {
+          if (storageResult.status === 'fulfilled' && storageResult.value?.connections) {
+            const conns = storageResult.value.connections;
+            setStorageProviders(conns);
+            const defaultConn = conns.find((c) => c.is_default) || conns[0];
+            if (defaultConn) {
+              setSelectedStorage(defaultConn.id);
+            }
+          }
+          if (foldersResult.status === 'fulfilled' && foldersResult.value?.folders) {
+            setFolders(foldersResult.value.folders);
           }
         })
-        .catch(() => {});
+        .finally(() => {
+          setIsLoadingStorage(false);
+        });
     }
-  }, [isOpen, initialFolderId]);
+  }, [isOpen, initialFolderId, session?.access_token]);
 
   const handleFileSelect = (e) => {
     if (e.target.files) {
@@ -151,8 +161,13 @@ export function MediaUploadModal({
       maxWidth="max-w-lg"
     >
       <div className="space-y-5">
-        {/* Warning if no cloud storage connected */}
-        {storageProviders.length === 0 ? (
+        {/* Loading state while checking storage connections */}
+        {isLoadingStorage ? (
+          <div className="p-8 flex flex-col items-center justify-center gap-3 text-slate-400">
+            <Loader2 className="w-6 h-6 animate-spin text-teal-400" />
+            <span className="text-xs">Checking connected storage providers...</span>
+          </div>
+        ) : storageProviders.length === 0 ? (
           <div className="p-5 rounded-3xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs space-y-3">
             <div className="flex items-center gap-2 font-semibold text-amber-200">
               <Cloud className="w-4 h-4 text-amber-400 shrink-0" />
