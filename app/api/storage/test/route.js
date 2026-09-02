@@ -23,6 +23,23 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
+
+    // If testing an existing saved connection
+    if (body.storageId || body.id) {
+      const connId = body.storageId || body.id;
+      const { getStorageConnectionInternal } = await import('@/lib/db/storage');
+      const record = await getStorageConnectionInternal(connId, authData.user.id);
+      if (!record) {
+        return NextResponse.json({ error: 'Storage connection record not found' }, { status: 404 });
+      }
+      const provider = StorageManager.getProviderFromRecord(record);
+      const testResult = await provider.testConnection();
+      if (!testResult.success) {
+        return NextResponse.json(testResult, { status: 400 });
+      }
+      return NextResponse.json(testResult);
+    }
+
     const validation = validateStorageInput(body);
     if (!validation.valid) {
       return NextResponse.json({ error: validation.message }, { status: 400 });

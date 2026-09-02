@@ -26,12 +26,13 @@ import { DisconnectStorageModal } from './DisconnectStorageModal';
 import { useToast } from '@/components/context/ToastContext';
 
 export function StorageManager({ onOpenAddModal }) {
-  const { success, error: toastError } = useToast();
+  const { success, error: toastError, info } = useToast();
 
   const [connections, setConnections] = useState([]);
   const [combinedMetrics, setCombinedMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [testingId, setTestingId] = useState(null);
+  const [refreshingId, setRefreshingId] = useState(null);
   const [settingDefaultId, setSettingDefaultId] = useState(null);
   const [disconnectTarget, setDisconnectTarget] = useState(null);
 
@@ -59,7 +60,11 @@ export function StorageManager({ onOpenAddModal }) {
   useEffect(() => {
     const handleUpdated = () => fetchStorageData();
     window.addEventListener('panda:storage:updated', handleUpdated);
-    return () => window.removeEventListener('panda:storage:updated', handleUpdated);
+    window.addEventListener('panda:media:uploaded', handleUpdated);
+    return () => {
+      window.removeEventListener('panda:storage:updated', handleUpdated);
+      window.removeEventListener('panda:media:uploaded', handleUpdated);
+    };
   }, [fetchStorageData]);
 
   // Re-test existing storage connection live
@@ -70,16 +75,12 @@ export function StorageManager({ onOpenAddModal }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          provider: conn.provider,
-          name: conn.name,
-          bucket: conn.bucket,
-          region: conn.region,
           storageId: conn.id,
         }),
       });
 
       const data = await res.json();
-      if (res.ok) {
+      if (res.ok && data.success) {
         success(`✓ ${conn.name} verified: Connection is live and active.`);
       } else {
         toastError(`✕ Connection check failed: ${data.error || 'Check credentials'}`);
@@ -88,6 +89,27 @@ export function StorageManager({ onOpenAddModal }) {
       toastError('Failed to execute connection test.');
     } finally {
       setTestingId(null);
+    }
+  };
+
+  // Live storage usage sync directly from cloud bucket
+  const handleRefreshUsage = async (conn) => {
+    setRefreshingId(conn.id);
+    try {
+      const res = await fetch(`/api/storage/${conn.id}/usage`, {
+        method: 'POST',
+      });
+
+      if (res.ok) {
+        success(`✓ Synced live storage usage for ${conn.name}.`);
+        await fetchStorageData();
+      } else {
+        toastError('Failed to refresh bucket usage.');
+      }
+    } catch {
+      toastError('Network error refreshing usage.');
+    } finally {
+      setRefreshingId(null);
     }
   };
 
@@ -207,6 +229,7 @@ export function StorageManager({ onOpenAddModal }) {
               const total = conn.total_bytes ? Number(conn.total_bytes) : null;
               const fileCount = parseInt(conn.file_count || '0', 10);
               const isTesting = testingId === conn.id;
+              const isRefreshing = refreshingId === conn.id;
               const isSettingDefault = settingDefaultId === conn.id;
 
               return (
@@ -238,6 +261,16 @@ export function StorageManager({ onOpenAddModal }) {
 
                       <div className="flex items-center gap-1">
                         <button
+                          onClick={() => handleRefreshUsage(conn)}
+                          disabled={isRefreshing}
+                          className={`p-1.5 text-slate-400 hover:text-teal-300 rounded-xl hover:bg-slate-800 transition-colors ${
+                            isRefreshing ? 'animate-spin text-teal-400' : ''
+                          }`}
+                          title="Sync live storage usage"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => setDisconnectTarget(conn)}
                           className="p-1.5 text-slate-400 hover:text-rose-400 rounded-xl hover:bg-slate-800 transition-colors"
                           title="Disconnect storage"
@@ -252,7 +285,7 @@ export function StorageManager({ onOpenAddModal }) {
                       <div className="flex justify-between text-xs text-slate-300 font-medium">
                         <span>{formatBytes(used)} stored</span>
                         <span className="text-slate-400">
-                          {total ? formatBytes(total) : 'Elastic / Unmetered'}
+                          {total ? `${formatBytes(total)} tier` : 'Elastic / Unmetered'}
                         </span>
                       </div>
 
