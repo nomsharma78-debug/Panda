@@ -109,6 +109,14 @@ function LoginContent() {
             </div>
           )}
 
+          {/* Revocation Notice Banner */}
+          {(searchParams.get('reason') === 'revoked' || searchParams.get('revoked') === 'true') && (
+            <div className="flex items-center gap-2.5 p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs animate-slide-up">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>Your session on this device was revoked from another device. Please sign in again.</span>
+            </div>
+          )}
+
           {/* Method Switcher */}
           <div className="grid grid-cols-2 gap-1 p-1 bg-slate-950 rounded-2xl border border-slate-800">
             <button

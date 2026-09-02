@@ -236,7 +236,7 @@ export function AuthProvider({ children }) {
           setUser(null);
           setSession(null);
           setClientCryptoKey(null);
-          router.replace('/login');
+          window.location.href = '/login?reason=revoked';
         }
       } catch {}
     };
