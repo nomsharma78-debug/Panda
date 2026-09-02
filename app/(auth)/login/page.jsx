@@ -89,18 +89,21 @@ function LoginContent() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 animate-fade-in">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
+    <div className="min-h-screen bg-slate-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900/40 via-slate-950 to-slate-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 animate-fade-in relative overflow-hidden">
+      {/* Subtle Ambient Light */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
+
+      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center relative z-10">
         <div className="flex justify-center mb-4">
           <PandaLogo size="lg" />
         </div>
-        <p className="text-xs text-slate-400 font-medium">
+        <p className="text-xs text-slate-400 font-medium tracking-tight">
           Sign in to access your encrypted personal digital vault
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-card space-y-6">
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4 relative z-10">
+        <div className="bg-slate-900/90 border border-slate-800/90 rounded-3xl p-6 sm:p-8 shadow-card space-y-6 backdrop-blur-xl">
           {/* Inactivity Notice Banner */}
           {isInactiveReason && (
             <div className="flex items-center gap-2.5 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs animate-slide-up">
@@ -118,16 +121,16 @@ function LoginContent() {
           )}
 
           {/* Method Switcher */}
-          <div className="grid grid-cols-2 gap-1 p-1 bg-slate-950 rounded-2xl border border-slate-800">
+          <div className="grid grid-cols-2 gap-1 p-1 bg-slate-950/80 rounded-2xl border border-slate-800/80">
             <button
               type="button"
               onClick={() => {
                 setAuthMethod('password');
                 setErrorMsg('');
               }}
-              className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold transition-all ${
+              className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-medium transition-all duration-150 ${
                 authMethod === 'password'
-                  ? 'bg-teal-500 text-slate-950 shadow-glow-teal'
+                  ? 'bg-slate-900 text-teal-300 font-semibold border border-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_2px_6px_rgba(0,0,0,0.3)]'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -141,9 +144,9 @@ function LoginContent() {
                 setAuthMethod('otp');
                 setErrorMsg('');
               }}
-              className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold transition-all ${
+              className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-medium transition-all duration-150 ${
                 authMethod === 'otp'
-                  ? 'bg-teal-500 text-slate-950 shadow-glow-teal'
+                  ? 'bg-slate-900 text-teal-300 font-semibold border border-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_2px_6px_rgba(0,0,0,0.3)]'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >

@@ -5,21 +5,23 @@
 :root {
   color-scheme: dark;
   --foreground-rgb: 248, 250, 252;
-  --background-rgb: 2, 6, 23;
+  --background-rgb: 7, 9, 14;
 }
 
 html {
-  background-color: #020617;
+  background-color: #07090e;
   color: #f8fafc;
+  scroll-behavior: smooth;
 }
 
 body {
   color: #f8fafc;
-  background-color: #020617;
+  background-color: #07090e;
   min-height: 100vh;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
 }
 
 /* ============================================================================= */
@@ -49,10 +51,10 @@ pre, code, .allow-select, .allow-select * {
   user-select: text !important;
 }
 
-/* Custom modern scrollbars */
+/* Custom ultra-smooth scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -60,39 +62,48 @@ pre, code, .allow-select, .allow-select * {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.15);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.4);
+  background: rgba(148, 163, 184, 0.35);
 }
 
-/* Glass & Card Utilities */
+/* Premium Surface & Glass Utilities */
 .glass-panel {
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(14, 17, 24, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.45);
 }
 
 .glass-panel-subtle {
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(20, 24, 34, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .vault-card {
-  background: #111827;
+  background: #0e1118;
   border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .vault-card:hover {
-  border-color: rgba(20, 184, 166, 0.3);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 0 15px -3px rgba(20, 184, 166, 0.1);
+  border-color: rgba(45, 212, 191, 0.25);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.5), 0 0 16px -4px rgba(20, 184, 166, 0.15);
+  transform: translateY(-1px);
 }
 
-/* Transitions */
+.specular-border {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* Reduced Motion Support */
 @media (prefers-reduced-motion: reduce) {
   *, ::before, ::after {
     animation-duration: 0.01ms !important;

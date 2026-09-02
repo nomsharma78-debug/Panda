@@ -18,6 +18,7 @@ import {
   Sparkles,
   Cloud,
   Lock,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Progress, formatBytes } from '@/components/ui/Progress';
@@ -100,7 +101,7 @@ export function DashboardOverview({
       count: data?.vault?.login || 0,
       icon: KeyRound,
       href: '/vault?type=login',
-      color: 'text-teal-400 bg-teal-500/10 border-teal-500/30',
+      color: 'text-teal-400 bg-teal-500/10 border-teal-500/25',
       subtitle: 'Encrypted in Database',
     },
     {
@@ -108,7 +109,7 @@ export function DashboardOverview({
       count: data?.vault?.card || 0,
       icon: CreditCard,
       href: '/vault?type=card',
-      color: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/30',
+      color: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/25',
       subtitle: 'Encrypted in Database',
     },
     {
@@ -116,7 +117,7 @@ export function DashboardOverview({
       count: data?.vault?.note || 0,
       icon: FileText,
       href: '/vault?type=note',
-      color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+      color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25',
       subtitle: 'Encrypted in Database',
     },
     {
@@ -124,7 +125,7 @@ export function DashboardOverview({
       count: data?.media?.total || 0,
       icon: Film,
       href: '/media',
-      color: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
+      color: 'text-amber-400 bg-amber-500/10 border-amber-500/25',
       subtitle: 'In Cloud Storage',
     },
   ];
@@ -134,28 +135,31 @@ export function DashboardOverview({
   return (
     <div className="space-y-6 sm:space-y-8 animate-fade-in">
       {/* Top Banner Greeting */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
-        <div className="space-y-1.5 sm:space-y-2">
-          <div className="flex items-center gap-2 text-[11px] sm:text-xs font-mono font-semibold uppercase tracking-wider text-teal-400">
-            <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span>Encrypted Personal Digital Vault</span>
+      <div className="bg-gradient-to-br from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800/90 rounded-2xl sm:rounded-3xl p-5 sm:p-7 md:p-8 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6 relative overflow-hidden">
+        {/* Subtle Ambient Light Orb */}
+        <div className="absolute -right-20 -top-20 w-64 h-64 bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="space-y-1.5 sm:space-y-2 relative z-10">
+          <div className="inline-flex items-center gap-2 text-[11px] sm:text-xs font-mono font-semibold uppercase tracking-wider text-teal-400 bg-teal-500/10 border border-teal-500/20 px-2.5 py-1 rounded-full w-fit">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Encrypted Personal Vault</span>
           </div>
           <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-tight">
             {getGreeting()}, {user?.name || (user?.email ? user.email.split('@')[0] : 'there')}!
           </h2>
-          <p className="text-xs text-slate-400 max-w-lg leading-relaxed">
+          <p className="text-xs sm:text-sm text-slate-400 max-w-lg leading-relaxed">
             Your login credentials, cards, and notes are encrypted in Panda&apos;s database. Media files are securely stored in your connected cloud object storage.
           </p>
         </div>
 
         {/* Quick Actions */}
-        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap relative z-10">
           <Button
             variant="secondary"
             size="sm"
             icon={Plus}
             onClick={() => onOpenAddVaultItem('login')}
-            className="rounded-xl sm:rounded-2xl"
+            className="rounded-xl"
           >
             New Password
           </Button>
@@ -165,7 +169,7 @@ export function DashboardOverview({
             size="sm"
             icon={hasStorage ? Upload : Cloud}
             onClick={hasStorage ? onOpenUpload : onOpenAddStorage}
-            className="rounded-xl sm:rounded-2xl"
+            className="rounded-xl"
           >
             {hasStorage ? 'Upload Media' : 'Connect Storage'}
           </Button>
@@ -174,13 +178,13 @@ export function DashboardOverview({
 
       {/* Zero Storage Onboarding Banner if not yet connected */}
       {!hasStorage && !loading && (
-        <div className="p-5 sm:p-6 rounded-3xl bg-slate-900 border border-teal-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-card">
+        <div className="p-5 sm:p-6 rounded-3xl bg-slate-900/90 border border-teal-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-card">
           <div className="flex items-start gap-3.5">
             <div className="p-2.5 rounded-2xl bg-teal-500/10 border border-teal-500/20 text-teal-400 shrink-0 mt-0.5">
               <Cloud className="w-5 h-5" />
             </div>
             <div className="space-y-1">
-              <h4 className="text-sm font-semibold text-white">Connect cloud storage to unlock your media library</h4>
+              <h4 className="text-sm font-semibold text-white tracking-tight">Connect cloud storage to unlock your media library</h4>
               <p className="text-xs text-slate-400 max-w-xl leading-relaxed">
                 Vault passwords, cards, and notes are ready immediately. To upload photos, videos, and documents, connect your Cloudflare R2, Backblaze B2, or Amazon S3 bucket.
               </p>
@@ -200,26 +204,26 @@ export function DashboardOverview({
       )}
 
       {/* 4 Stat Overview Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
         {statCards.map((stat) => {
           const Icon = stat.icon;
           return (
             <Link
               key={stat.title}
               href={stat.href}
-              className="bg-slate-900 border border-slate-800 hover:border-slate-700/80 rounded-2xl p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 group"
+              className="bg-slate-900/80 border border-slate-800/80 hover:border-slate-700 rounded-2xl p-4 sm:p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 group"
             >
               <div className="flex items-center justify-between mb-3">
-                <div className={`p-2.5 rounded-xl border ${stat.color}`}>
+                <div className={`p-2 sm:p-2.5 rounded-xl border ${stat.color} shadow-subtle`}>
                   <Icon className="w-4 h-4" />
                 </div>
-                <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-teal-400 group-hover:translate-x-0.5 transition-all" />
+                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-teal-400 group-hover:translate-x-0.5 transition-all" />
               </div>
-              <p className="text-xs font-medium text-slate-400">{stat.title}</p>
-              <h3 className="text-2xl font-bold text-white mt-0.5 font-mono">
+              <p className="text-xs font-medium text-slate-400 tracking-tight">{stat.title}</p>
+              <h3 className="text-2xl font-bold text-white mt-0.5 tracking-tight">
                 {loading ? '...' : stat.count}
               </h3>
-              <p className="text-[10px] text-slate-500 font-mono mt-1">{stat.subtitle}</p>
+              <p className="text-[10px] text-slate-400 font-mono mt-1">{stat.subtitle}</p>
             </Link>
           );
         })}
@@ -228,14 +232,14 @@ export function DashboardOverview({
       {/* Main 2-Column Split: Storage Indicator & Recent Media */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Storage Widget (1 Column) */}
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-card flex flex-col justify-between space-y-5">
+        <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 shadow-card flex flex-col justify-between space-y-5">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-semibold text-white">
+              <div className="flex items-center gap-2 text-sm font-semibold text-white tracking-tight">
                 <HardDrive className="w-4 h-4 text-teal-400" />
                 <span>Object Storage</span>
               </div>
-              <Link href="/storage" className="text-xs text-teal-400 hover:underline">
+              <Link href="/storage" className="text-xs text-teal-400 hover:text-teal-300 transition-colors font-medium">
                 Manage
               </Link>
             </div>
@@ -244,10 +248,10 @@ export function DashboardOverview({
               Unified capacity across all connected external cloud buckets.
             </p>
 
-            <div className="space-y-2 bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
+            <div className="space-y-2 bg-slate-950/80 p-4 rounded-2xl border border-slate-800/80">
               <div className="flex justify-between text-xs text-slate-200 font-medium">
                 <span>{data?.storage ? formatBytes(data.storage.usedBytes) : '0 B'} used</span>
-                <span className="text-slate-400">
+                <span className="text-slate-400 font-mono text-[11px]">
                   {data?.storage?.totalBytes ? formatBytes(data.storage.totalBytes) : 'Elastic Cloud'}
                 </span>
               </div>
@@ -259,7 +263,7 @@ export function DashboardOverview({
                   variant="teal"
                 />
               )}
-              <p className="text-[11px] text-slate-500 font-mono text-right pt-1">
+              <p className="text-[11px] text-slate-400 font-mono text-right pt-1">
                 {data?.storage?.providerCount || 0} connected provider{data?.storage?.providerCount !== 1 ? 's' : ''}
               </p>
             </div>
@@ -277,13 +281,13 @@ export function DashboardOverview({
         </div>
 
         {/* Recent Media Preview Strip (2 Columns) */}
-        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-card flex flex-col justify-between space-y-4">
+        <div className="lg:col-span-2 bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 shadow-card flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm font-semibold text-white">
+            <div className="flex items-center gap-2 text-sm font-semibold text-white tracking-tight">
               <Film className="w-4 h-4 text-teal-400" />
               <span>Recent Cloud Media</span>
             </div>
-            <Link href="/media" className="text-xs text-teal-400 hover:underline flex items-center gap-1">
+            <Link href="/media" className="text-xs text-teal-400 hover:text-teal-300 transition-colors flex items-center gap-1 font-medium">
               <span>View All</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
@@ -292,7 +296,7 @@ export function DashboardOverview({
           {loading ? (
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="aspect-square rounded-2xl bg-slate-950 animate-pulse" />
+                <div key={i} className="aspect-square rounded-2xl bg-slate-950/80 border border-slate-800/50 animate-pulse" />
               ))}
             </div>
           ) : !data?.recentMedia || data.recentMedia.length === 0 ? (
@@ -320,7 +324,7 @@ export function DashboardOverview({
                     setLightboxIndex(idx);
                     setLightboxOpen(true);
                   }}
-                  className="aspect-square rounded-2xl bg-slate-950 border border-slate-800 hover:border-teal-500/60 overflow-hidden relative group transition-all"
+                  className="aspect-square rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-teal-500/50 overflow-hidden relative group transition-all"
                 >
                   <div className="w-full h-full flex items-center justify-center text-slate-400 group-hover:scale-105 transition-transform">
                     {m.media_type === 'video' ? (
@@ -340,11 +344,11 @@ export function DashboardOverview({
           )}
 
           <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/80">
-            <span className="flex items-center gap-1.5 text-[11px] text-slate-500 font-mono">
+            <span className="flex items-center gap-1.5 text-[11px] text-slate-400 font-mono">
               <Lock className="w-3.5 h-3.5 text-teal-400" />
               <span>Direct streaming from user cloud storage</span>
             </span>
-            <Link href="/vault" className="text-teal-400 hover:underline flex items-center gap-1 text-xs">
+            <Link href="/vault" className="text-teal-400 hover:text-teal-300 transition-colors flex items-center gap-1 text-xs font-medium">
               <span>Open Password Vault</span>
               <ArrowRight className="w-3 h-3" />
             </Link>

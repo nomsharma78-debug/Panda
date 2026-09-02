@@ -283,7 +283,7 @@ export function SettingsManager({ initialTab = 'account' }) {
   return (
     <div className="space-y-6">
       {/* Tab Selector */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-3 overflow-x-auto">
+      <div className="flex items-center gap-1.5 border-b border-slate-800/80 pb-3 overflow-x-auto scrollbar-none">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
@@ -291,13 +291,13 @@ export function SettingsManager({ initialTab = 'account' }) {
             <button
               key={tab.id}
               onClick={() => handleTabChange(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all ${
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-150 ${
                 active
-                  ? 'bg-teal-500 text-slate-950 font-semibold shadow-glow-teal'
-                  : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  ? 'bg-slate-900 text-teal-300 font-semibold border border-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_2px_6px_rgba(0,0,0,0.3)]'
+                  : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent'
               }`}
             >
-              <Icon className="w-3.5 h-3.5" />
+              <Icon className={`w-3.5 h-3.5 ${active ? 'text-teal-400' : 'text-slate-400'}`} />
               <span>{tab.label}</span>
             </button>
           );
