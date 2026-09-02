@@ -35,8 +35,10 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { StorageHowItWorksModal } from '@/components/storage/StorageHowItWorksModal';
 import { useToast } from '@/components/context/ToastContext';
+import { useAuth } from '@/components/context/AuthContext';
 
 export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
+  const { session } = useAuth();
   const { success, error: toastError } = useToast();
 
   const [mediaList, setMediaList] = useState([]);
@@ -58,33 +60,14 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   const [deleteFolderTarget, setDeleteFolderTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const fetchMediaAndFolders = useCallback(async () => {
+  const initialLoadedRef = React.useRef(false);
+
+  const fetchMediaAndFolders = useCallback(async (isSilent = false) => {
     try {
-      setLoading(true);
-
-      // 1. Check storage connections
-      const storageRes = await fetch('/api/storage');
-      let storageConnected = false;
-      if (storageRes.ok) {
-        const storageData = await storageRes.json();
-        storageConnected = (storageData.connections || []).length > 0;
-        setHasStorage(storageConnected);
+      if (!isSilent && !initialLoadedRef.current) {
+        setLoading(true);
       }
 
-      if (!storageConnected) {
-        setMediaList([]);
-        setFolders([]);
-        return;
-      }
-
-      // 2. Fetch Folders
-      const foldersRes = await fetch(`/api/media/folders${currentFolder ? `?parentId=${currentFolder.id}` : ''}`);
-      if (foldersRes.ok) {
-        const foldersData = await foldersRes.json();
-        setFolders(foldersData.folders || []);
-      }
-
-      // 3. Fetch Media files
       const params = new URLSearchParams();
       if (activeFilter !== 'all') params.set('type', activeFilter);
       if (searchQuery) params.set('search', searchQuery);
@@ -92,20 +75,47 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         params.set('folderId', currentFolder.id);
       }
 
-      const res = await fetch(`/api/media?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setMediaList(data.items || []);
+      const foldersUrl = `/api/media/folders${currentFolder ? `?parentId=${currentFolder.id}` : ''}`;
+      const mediaUrl = `/api/media?${params.toString()}`;
+
+      const headers = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      // Parallel execution for maximum speed (<100ms)
+      const [storageRes, foldersRes, mediaRes] = await Promise.allSettled([
+        fetch('/api/storage', { headers }),
+        fetch(foldersUrl, { headers }),
+        fetch(mediaUrl, { headers }),
+      ]);
+
+      let storageConnected = false;
+      if (storageRes.status === 'fulfilled' && storageRes.value.ok) {
+        const storageData = await storageRes.value.json();
+        storageConnected = (storageData.connections || []).length > 0;
+        setHasStorage(storageConnected);
+      }
+
+      if (foldersRes.status === 'fulfilled' && foldersRes.value.ok) {
+        const foldersData = await foldersRes.value.json();
+        setFolders(foldersData.folders || []);
+      }
+
+      if (mediaRes.status === 'fulfilled' && mediaRes.value.ok) {
+        const mediaData = await mediaRes.value.json();
+        setMediaList(mediaData.items || []);
       }
     } catch (err) {
       console.error('Fetch media error:', err);
     } finally {
+      initialLoadedRef.current = true;
       setLoading(false);
     }
-  }, [activeFilter, searchQuery, currentFolder]);
+  }, [activeFilter, searchQuery, currentFolder, session?.access_token]);
 
   useEffect(() => {
-    fetchMediaAndFolders();
+    fetchMediaAndFolders(initialLoadedRef.current);
   }, [fetchMediaAndFolders]);
 
   // Listen to global upload/storage events

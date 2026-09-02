@@ -24,8 +24,10 @@ import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { DisconnectStorageModal } from './DisconnectStorageModal';
 import { useToast } from '@/components/context/ToastContext';
+import { useAuth } from '@/components/context/AuthContext';
 
 export function StorageManager({ onOpenAddModal }) {
+  const { session } = useAuth();
   const { success, error: toastError, info } = useToast();
 
   const [connections, setConnections] = useState([]);
@@ -36,10 +38,18 @@ export function StorageManager({ onOpenAddModal }) {
   const [settingDefaultId, setSettingDefaultId] = useState(null);
   const [disconnectTarget, setDisconnectTarget] = useState(null);
 
-  const fetchStorageData = useCallback(async () => {
+  const initialLoadedRef = React.useRef(false);
+
+  const fetchStorageData = useCallback(async (isSilent = false) => {
     try {
-      setLoading(true);
-      const res = await fetch('/api/storage');
+      if (!isSilent && !initialLoadedRef.current) {
+        setLoading(true);
+      }
+      const headers = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      const res = await fetch('/api/storage', { headers });
       if (res.ok) {
         const data = await res.json();
         setConnections(data.connections || []);
@@ -48,12 +58,13 @@ export function StorageManager({ onOpenAddModal }) {
     } catch (err) {
       console.error('Fetch storage connections error:', err);
     } finally {
+      initialLoadedRef.current = true;
       setLoading(false);
     }
-  }, []);
+  }, [session?.access_token]);
 
   useEffect(() => {
-    fetchStorageData();
+    fetchStorageData(initialLoadedRef.current);
   }, [fetchStorageData]);
 
   // Listen to global updates

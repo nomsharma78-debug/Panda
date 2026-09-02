@@ -18,7 +18,7 @@ export function AppLayout({
   onSearch = null,
   searchPlaceholder = 'Search in Panda...',
 }) {
-  const { user, loading } = useAuth();
+  const { user, session, loading } = useAuth();
   const router = useRouter();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -31,7 +31,11 @@ export function AppLayout({
   // Fetch storage metrics for the sidebar widget
   const fetchStorageSummary = async () => {
     try {
-      const res = await fetch('/api/storage');
+      const headers = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      const res = await fetch('/api/storage', { headers });
       if (res.ok) {
         const data = await res.json();
         setStorageMetrics(data.combined);

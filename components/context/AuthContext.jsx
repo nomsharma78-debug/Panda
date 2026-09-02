@@ -226,7 +226,12 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!user) return;
 
+    let lastCheckTime = 0;
     const checkRevocationStatus = async () => {
+      const now = Date.now();
+      if (now - lastCheckTime < 25000) return; // Throttle to max once per 25s
+      lastCheckTime = now;
+
       try {
         const headers = {};
         if (session?.access_token) {
@@ -248,7 +253,7 @@ export function AuthProvider({ children }) {
       } catch {}
     };
 
-    const interval = setInterval(checkRevocationStatus, 5000);
+    const interval = setInterval(checkRevocationStatus, 30000);
     window.addEventListener('focus', checkRevocationStatus);
 
     return () => {

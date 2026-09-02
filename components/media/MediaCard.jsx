@@ -16,23 +16,25 @@ import { formatBytes } from '@/components/ui/Progress';
 
 export function MediaCard({
   media,
+  item,
   isSelected = false,
   isSelectionMode = false,
   onToggleSelect,
   onClick,
   onDelete,
 }) {
+  const targetMedia = media || item || {};
   const [imgError, setImgError] = useState(false);
-  const accessUrl = `/api/media/${media.id}/access`;
-  const downloadUrl = `/api/media/${media.id}/download`;
+  const accessUrl = targetMedia.id ? `/api/media/${targetMedia.id}/access` : '';
+  const downloadUrl = targetMedia.id ? `/api/media/${targetMedia.id}/download` : '';
 
-  const isPhoto = media.media_type === 'photo';
-  const isVideo = media.media_type === 'video';
-  const isPdf = media.media_type === 'pdf';
-  const isDoc = media.media_type === 'document';
+  const isPhoto = targetMedia.media_type === 'photo';
+  const isVideo = targetMedia.media_type === 'video';
+  const isPdf = targetMedia.media_type === 'pdf';
+  const isDoc = targetMedia.media_type === 'document';
 
-  const timeStr = media.uploaded_at
-    ? new Date(media.uploaded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const timeStr = targetMedia.uploaded_at
+    ? new Date(targetMedia.uploaded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '';
 
   return (
@@ -49,7 +51,7 @@ export function MediaCard({
         {isPhoto && !imgError ? (
           <img
             src={accessUrl}
-            alt={media.original_filename}
+            alt={targetMedia.original_filename || 'Photo'}
             onError={() => setImgError(true)}
             loading="lazy"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
@@ -82,7 +84,7 @@ export function MediaCard({
               <File className="w-6 h-6" />
             </div>
             <span className="text-[11px] font-mono font-semibold text-slate-300 uppercase tracking-wider">
-              {media.media_type || 'File'}
+              {targetMedia.media_type || 'File'}
             </span>
           </div>
         )}
@@ -105,7 +107,7 @@ export function MediaCard({
         </button>
 
         {/* Encrypted Badge Indicator */}
-        {media.encrypted && (
+        {targetMedia.encrypted && (
           <div className="absolute top-2.5 right-2.5 p-1 rounded-md bg-black/60 backdrop-blur-sm border border-teal-500/30 text-teal-400 opacity-80" title="AES-256-GCM Encrypted">
             <Lock className="w-3 h-3" />
           </div>
@@ -114,11 +116,11 @@ export function MediaCard({
 
       {/* Card Info Footer */}
       <div className="p-3 bg-slate-900/90 flex flex-col gap-1 border-t border-slate-800">
-        <p className="text-xs font-medium text-slate-200 truncate" title={media.original_filename}>
-          {media.original_filename}
+        <p className="text-xs font-medium text-slate-200 truncate" title={targetMedia.original_filename}>
+          {targetMedia.original_filename}
         </p>
         <div className="flex items-center justify-between text-[11px] text-slate-400">
-          <span>{formatBytes(media.file_size)}</span>
+          <span>{formatBytes(targetMedia.file_size)}</span>
           <span>{timeStr}</span>
         </div>
       </div>

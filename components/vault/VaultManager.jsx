@@ -51,9 +51,11 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
     }
   };
 
-  const fetchItems = useCallback(async () => {
+  const fetchItems = useCallback(async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent && !initialLoadedRef.current) {
+        setLoading(true);
+      }
       const url = activeTab === 'all' ? '/api/vault' : `/api/vault?type=${activeTab}`;
       const headers = {};
       if (session?.access_token) {
@@ -95,12 +97,15 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
     } catch (err) {
       console.error('Fetch vault items error:', err);
     } finally {
+      initialLoadedRef.current = true;
       setLoading(false);
     }
   }, [activeTab, clientCryptoKey, session]);
 
+  const initialLoadedRef = React.useRef(false);
+
   useEffect(() => {
-    fetchItems();
+    fetchItems(initialLoadedRef.current);
   }, [fetchItems]);
 
   useEffect(() => {

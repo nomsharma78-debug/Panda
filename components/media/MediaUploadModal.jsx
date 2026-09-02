@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Upload, HardDrive, ShieldCheck, CheckCircle2, AlertCircle, FileText, X, Plus, Cloud, Folder } from 'lucide-react';
 import { Progress, formatBytes } from '@/components/ui/Progress';
 import { useToast } from '@/components/context/ToastContext';
+import { useAuth } from '@/components/context/AuthContext';
 
 export function MediaUploadModal({
   isOpen,
@@ -14,6 +15,7 @@ export function MediaUploadModal({
   onUploadSuccess,
   onOpenConnectStorage,
 }) {
+  const { session } = useAuth();
   const { success, error: toastError } = useToast();
   const fileInputRef = useRef(null);
 
@@ -98,8 +100,14 @@ export function MediaUploadModal({
       formData.append('encrypt', String(encryptPayload));
 
       try {
+        const headers = {};
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+
         const res = await fetch('/api/media/upload', {
           method: 'POST',
+          headers,
           body: formData,
         });
 
@@ -120,6 +128,10 @@ export function MediaUploadModal({
     setIsUploading(false);
     success(`Successfully uploaded ${successCount} file(s) to encrypted cloud storage.`);
     setFiles([]);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('panda:media:uploaded'));
+      window.dispatchEvent(new CustomEvent('panda:storage:updated'));
+    }
     if (onUploadSuccess) onUploadSuccess();
     onClose();
   };
