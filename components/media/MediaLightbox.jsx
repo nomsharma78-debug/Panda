@@ -59,7 +59,7 @@ export function MediaLightbox({
 
   // Fetch image as blob when item changes
   useEffect(() => {
-    if (!isOpen || !currentItem || currentItem.media_type !== 'photo' || !session?.access_token) {
+    if (!isOpen || !currentItem || currentItem.media_type !== 'photo') {
       setPhotoBlobUrl(null);
       setPhotoLoading(false);
       setPhotoError(false);
@@ -71,10 +71,12 @@ export function MediaLightbox({
     setPhotoError(false);
     setPhotoBlobUrl(null);
 
-    const tokenParam = `?token=${encodeURIComponent(session.access_token)}`;
-    const url = `/api/media/${currentItem.id}/access${tokenParam}`;
+    const mediaUrl = `/api/media/${currentItem.id}/access`;
 
-    fetch(url)
+    fetch(mediaUrl, {
+      headers: session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {},
+      credentials: 'include',
+    })
       .then((res) => {
         if (!res.ok) throw new Error('Unauthorized');
         return res.blob();

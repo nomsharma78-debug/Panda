@@ -38,9 +38,9 @@ export function MediaCard({
   const accessUrl = targetMedia.id ? `/api/media/${targetMedia.id}/access${tokenParam}` : '';
   const downloadUrl = targetMedia.id ? `/api/media/${targetMedia.id}/download${tokenParam}` : '';
 
-  // Fetch photo as blob so thumbnail displays stably without repeated auth re-requests
+  // Fetch photo as blob for stable, reliable display
   useEffect(() => {
-    if (!isPhoto || !targetMedia.id || !session?.access_token) {
+    if (!isPhoto || !targetMedia.id) {
       setBlobUrl(null);
       setImgLoading(false);
       return;
@@ -50,15 +50,20 @@ export function MediaCard({
     setImgLoading(true);
     setImgError(false);
 
-    fetch(accessUrl)
+    const mediaUrl = `/api/media/${targetMedia.id}/access`;
+    const fetchHeaders = {};
+    if (session?.access_token) {
+      fetchHeaders['Authorization'] = `Bearer ${session.access_token}`;
+    }
+
+    fetch(mediaUrl, { headers: fetchHeaders, credentials: 'include' })
       .then((res) => {
-        if (!res.ok) throw new Error('Fetch failed');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.blob();
       })
       .then((blob) => {
         if (!cancelled) {
           const url = URL.createObjectURL(blob);
-          // Revoke old blob URL before setting new one
           if (prevBlobRef.current) {
             URL.revokeObjectURL(prevBlobRef.current);
           }
@@ -68,8 +73,9 @@ export function MediaCard({
           setImgError(false);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (!cancelled) {
+          console.error('[MediaCard] Failed to load image:', err.message);
           setImgError(true);
           setImgLoading(false);
         }
