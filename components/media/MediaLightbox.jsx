@@ -20,6 +20,7 @@ import { VideoPlayer } from './VideoPlayer';
 import { formatBytes } from '@/components/ui/Progress';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { useAuth } from '@/components/context/AuthContext';
 
 export function MediaLightbox({
   mediaList = [],
@@ -65,10 +66,12 @@ export function MediaLightbox({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose, handlePrev, handleNext]);
 
+  const { session } = useAuth();
   if (!isOpen || !currentItem) return null;
 
-  const accessUrl = `/api/media/${currentItem.id}/access`;
-  const downloadUrl = `/api/media/${currentItem.id}/download`;
+  const tokenParam = session?.access_token ? `?token=${encodeURIComponent(session.access_token)}` : '';
+  const accessUrl = `/api/media/${currentItem.id}/access${tokenParam}`;
+  const downloadUrl = `/api/media/${currentItem.id}/download${tokenParam}`;
 
   // Localized date formatting in user's local timezone
   const formattedDate = currentItem.uploaded_at

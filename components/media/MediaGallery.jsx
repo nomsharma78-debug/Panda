@@ -120,12 +120,24 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
 
   // Listen to global upload/storage events
   useEffect(() => {
-    const handleUpdated = () => fetchMediaAndFolders();
-    window.addEventListener('panda:media:uploaded', handleUpdated);
-    window.addEventListener('panda:storage:updated', handleUpdated);
+    const handleMediaUploaded = (e) => {
+      if (e?.detail?.newItems && Array.isArray(e.detail.newItems) && e.detail.newItems.length > 0) {
+        setMediaList((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          const toAdd = e.detail.newItems.filter((m) => !existingIds.has(m.id));
+          return [...toAdd, ...prev];
+        });
+      }
+      fetchMediaAndFolders(true);
+    };
+
+    const handleStorageUpdated = () => fetchMediaAndFolders(true);
+
+    window.addEventListener('panda:media:uploaded', handleMediaUploaded);
+    window.addEventListener('panda:storage:updated', handleStorageUpdated);
     return () => {
-      window.removeEventListener('panda:media:uploaded', handleUpdated);
-      window.removeEventListener('panda:storage:updated', handleUpdated);
+      window.removeEventListener('panda:media:uploaded', handleMediaUploaded);
+      window.removeEventListener('panda:storage:updated', handleStorageUpdated);
     };
   }, [fetchMediaAndFolders]);
 

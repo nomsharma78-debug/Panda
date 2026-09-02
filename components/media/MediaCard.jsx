@@ -13,6 +13,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { formatBytes } from '@/components/ui/Progress';
+import { useAuth } from '@/components/context/AuthContext';
 
 export function MediaCard({
   media,
@@ -23,10 +24,12 @@ export function MediaCard({
   onClick,
   onDelete,
 }) {
+  const { session } = useAuth();
   const targetMedia = media || item || {};
   const [imgError, setImgError] = useState(false);
-  const accessUrl = targetMedia.id ? `/api/media/${targetMedia.id}/access` : '';
-  const downloadUrl = targetMedia.id ? `/api/media/${targetMedia.id}/download` : '';
+  const tokenParam = session?.access_token ? `?token=${encodeURIComponent(session.access_token)}` : '';
+  const accessUrl = targetMedia.id ? `/api/media/${targetMedia.id}/access${tokenParam}` : '';
+  const downloadUrl = targetMedia.id ? `/api/media/${targetMedia.id}/download${tokenParam}` : '';
 
   const isPhoto = targetMedia.media_type === 'photo';
   const isVideo = targetMedia.media_type === 'video';

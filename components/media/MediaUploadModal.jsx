@@ -99,6 +99,7 @@ export function MediaUploadModal({
     setUploadProgress(0);
 
     let successCount = 0;
+    const uploadedMediaList = [];
 
     for (let i = 0; i < files.length; i++) {
       setCurrentFileIndex(i);
@@ -121,9 +122,14 @@ export function MediaUploadModal({
           body: formData,
         });
 
+        const resData = await res.json().catch(() => ({}));
+
         if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || `Upload failed for ${file.name}`);
+          throw new Error(resData.error || `Upload failed for ${file.name}`);
+        }
+
+        if (resData.media) {
+          uploadedMediaList.push(resData.media);
         }
 
         successCount++;
@@ -139,10 +145,10 @@ export function MediaUploadModal({
     success(`Successfully uploaded ${successCount} file(s) to encrypted cloud storage.`);
     setFiles([]);
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('panda:media:uploaded'));
+      window.dispatchEvent(new CustomEvent('panda:media:uploaded', { detail: { newItems: uploadedMediaList } }));
       window.dispatchEvent(new CustomEvent('panda:storage:updated'));
     }
-    if (onUploadSuccess) onUploadSuccess();
+    if (onUploadSuccess) onUploadSuccess(uploadedMediaList);
     onClose();
   };
 

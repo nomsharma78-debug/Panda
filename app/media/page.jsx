@@ -23,8 +23,8 @@ export default function MediaPage() {
       <MediaUploadModal
         isOpen={uploadOpen}
         onClose={() => setUploadOpen(false)}
-        onUploadSuccess={() => {
-          window.dispatchEvent(new CustomEvent('panda:media:uploaded'));
+        onUploadSuccess={(newItems) => {
+          window.dispatchEvent(new CustomEvent('panda:media:uploaded', { detail: { newItems } }));
         }}
         onOpenConnectStorage={() => {
           setUploadOpen(false);

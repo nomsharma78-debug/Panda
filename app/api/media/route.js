@@ -28,10 +28,17 @@ export async function GET(request) {
       offset,
     });
 
-    return NextResponse.json({
-      items,
-      count: items.length,
-    });
+    return NextResponse.json(
+      {
+        items,
+        count: items.length,
+      },
+      {
+        headers: {
+          'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+        },
+      }
+    );
   } catch (err) {
     console.error('List media error:', err);
     return NextResponse.json({ error: 'Failed to retrieve media library' }, { status: 500 });
