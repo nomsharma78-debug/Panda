@@ -31,6 +31,10 @@ export async function POST(request) {
     // Run test connection with temporary object write/read/delete
     const testResult = await StorageManager.testCandidateConfig(body);
 
+    if (!testResult.success) {
+      return NextResponse.json(testResult, { status: 400 });
+    }
+
     return NextResponse.json(testResult);
   } catch (err) {
     console.error('Storage test error:', err);
@@ -38,7 +42,7 @@ export async function POST(request) {
       {
         success: false,
         checks: { endpoint: false },
-        error: 'Unable to connect to this storage. Please verify your endpoint and credentials.',
+        error: err.message || 'Unable to connect to this storage. Please verify your endpoint and credentials.',
       },
       { status: 400 }
     );

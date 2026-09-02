@@ -138,23 +138,23 @@ export function AddStorageModal({ isOpen, onClose, onStorageAdded }) {
       });
 
       const data = await res.json();
-      if (!res.ok) {
+      if (!res.ok || !data.success) {
         setTestResult({
           success: false,
-          error: data.error || 'Connection failed. Please check credentials and endpoint.',
+          error: data.error || 'Connection check failed: Access denied or invalid credentials.',
         });
-        toastError('Storage connection test failed.');
+        toastError(data.error || 'Storage connection test failed.');
       } else {
         setTestResult({
           success: true,
-          message: data.message || 'Storage connection verified successfully!',
+          message: data.message || 'Storage connection verified: live read/write test passed!',
         });
         success('Connection verified! You can now save and connect.');
       }
     } catch (err) {
       setTestResult({
         success: false,
-        error: 'Network error communicating with Panda server.',
+        error: err.message || 'Network error communicating with Panda server.',
       });
       toastError('Connection test error.');
     } finally {
