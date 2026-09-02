@@ -390,7 +390,8 @@ export function AddStorageModal({ isOpen, onClose, onStorageAdded }) {
             <Input
               label="Connection Display Name"
               type="text"
-              placeholder="e.g. My Primary Storage"
+              placeholder="e.g. My Backblaze Storage"
+              helperText="A friendly label for this bucket"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
@@ -400,6 +401,7 @@ export function AddStorageModal({ isOpen, onClose, onStorageAdded }) {
               label="Bucket Name"
               type="text"
               placeholder="e.g. panda-vault-media"
+              helperText={`The exact name of your bucket in ${currentMeta.name}`}
               value={bucket}
               onChange={(e) => setBucket(e.target.value)}
               required
@@ -410,6 +412,7 @@ export function AddStorageModal({ isOpen, onClose, onStorageAdded }) {
                 label="Cloudflare Account ID"
                 type="text"
                 placeholder="32-character hexadecimal Account ID"
+                helperText="Found on the right side of Cloudflare R2 overview"
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
                 required
@@ -419,8 +422,9 @@ export function AddStorageModal({ isOpen, onClose, onStorageAdded }) {
             {currentMeta.fields.includes('endpoint') && (
               <Input
                 label="S3 Endpoint URL"
-                type="url"
-                placeholder={currentMeta.defaults?.endpoint || 'https://s3.your-region.provider.com'}
+                type="text"
+                placeholder={currentMeta.defaults?.endpoint || 's3.us-west-004.backblazeb2.com'}
+                helperText={selectedProvider === 'b2' ? 'Found under your Bucket Details in Backblaze (e.g. s3.us-west-004.backblazeb2.com)' : 'S3 API Endpoint URL'}
                 value={endpoint}
                 onChange={(e) => setEndpoint(e.target.value)}
                 required
@@ -431,16 +435,18 @@ export function AddStorageModal({ isOpen, onClose, onStorageAdded }) {
               <Input
                 label="Region (Optional)"
                 type="text"
-                placeholder={currentMeta.defaults?.region || 'us-east-1'}
+                placeholder={currentMeta.defaults?.region || 'us-west-004'}
+                helperText={selectedProvider === 'b2' ? 'e.g. us-west-004 (from your endpoint)' : 'e.g. us-east-1'}
                 value={region}
                 onChange={(e) => setRegion(e.target.value)}
               />
             )}
 
             <Input
-              label="Access Key ID"
+              label={selectedProvider === 'b2' ? 'Access Key ID (keyID)' : 'Access Key ID'}
               type="text"
-              placeholder="Paste your Access Key ID"
+              placeholder={selectedProvider === 'b2' ? 'Paste your Backblaze keyID' : 'Paste your Access Key ID'}
+              helperText={selectedProvider === 'b2' ? 'In Backblaze -> Application Keys -> copy "keyID"' : 'Your cloud API Access Key'}
               value={accessKey}
               onChange={(e) => setAccessKey(e.target.value)}
               required
@@ -449,9 +455,10 @@ export function AddStorageModal({ isOpen, onClose, onStorageAdded }) {
 
             <div className="relative">
               <Input
-                label="Secret Access Key"
+                label={selectedProvider === 'b2' ? 'Secret Access Key (applicationKey)' : 'Secret Access Key'}
                 type={showSecret ? 'text' : 'password'}
-                placeholder="Paste your Secret Access Key"
+                placeholder={selectedProvider === 'b2' ? 'Paste your Backblaze applicationKey' : 'Paste your Secret Access Key'}
+                helperText={selectedProvider === 'b2' ? 'In Backblaze -> Application Keys -> copy "applicationKey"' : 'Your cloud API Secret Key'}
                 value={secretKey}
                 onChange={(e) => setSecretKey(e.target.value)}
                 required
