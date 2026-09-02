@@ -45,7 +45,7 @@ export async function POST(request) {
     if (!testResult.success) {
       return NextResponse.json(
         {
-          error: `Storage validation failed: ${testResult.error || 'Could not verify write/read permissions'}. Credentials were not saved.`,
+          error: testResult.error || 'Could not verify storage credentials. Please check your bucket details and try again.',
           checks: testResult.checks,
         },
         { status: 400 }
