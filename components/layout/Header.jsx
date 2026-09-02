@@ -14,6 +14,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { PandaLogo } from '@/components/ui/PandaLogo';
 import { useAuth } from '@/components/context/AuthContext';
 
 export function Header({
@@ -37,16 +38,12 @@ export function Header({
   };
 
   return (
-    <header className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-8 py-4 bg-slate-950/80 backdrop-blur-md border-b border-slate-800/80">
+    <header className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-8 py-3.5 bg-slate-950/70 backdrop-blur-xl border-b border-slate-800/80">
       <div className="flex items-center gap-3">
-        {/* Mobile menu trigger */}
-        <button
-          onClick={onOpenMobileMenu}
-          className="md:hidden p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 border border-slate-800"
-          aria-label="Open mobile menu"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
+        {/* Mobile Brand Logo */}
+        <Link href="/dashboard" className="md:hidden flex items-center shrink-0">
+          <PandaLogo size="sm" />
+        </Link>
 
         <div>
           <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight flex items-center gap-2">
