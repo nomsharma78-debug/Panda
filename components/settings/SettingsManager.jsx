@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   User,
   Shield,
@@ -28,12 +29,29 @@ import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/components/context/AuthContext';
 import { useToast } from '@/components/context/ToastContext';
+import { formatRelativeActivity } from '@/lib/utils/device';
 
 export function SettingsManager({ initialTab = 'account' }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+
   const { user, session, logout, inactivityMinutes, updateInactivityTimeout } = useAuth();
   const { success, error: toastError } = useToast();
 
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [activeTab, setActiveTab] = useState(tabFromUrl || initialTab || 'account');
+
+  // Keep state in sync if URL changes
+  useEffect(() => {
+    if (tabFromUrl && tabFromUrl !== activeTab) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [tabFromUrl]);
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    router.replace(`/settings?tab=${tabId}`, { scroll: false });
+  };
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -46,6 +64,13 @@ export function SettingsManager({ initialTab = 'account' }) {
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [isRevokingSessions, setIsRevokingSessions] = useState(false);
   const [revokingId, setRevokingId] = useState(null);
+
+  // Live 1-second dynamic relative time tick
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Dual Database setup SQL state
   const [selectedDbType, setSelectedDbType] = useState('vault'); // 'vault' | 'auth'
@@ -60,19 +85,24 @@ export function SettingsManager({ initialTab = 'account' }) {
   const [auditLogs, setAuditLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
 
+  // Fetch data on tab change or poll sessions in background
   useEffect(() => {
     if (activeTab === 'security') {
-      fetchSessions();
+      fetchSessions(sessions.length === 0);
+      const pollInterval = setInterval(() => {
+        fetchSessions(false); // silent live background sync
+      }, 3000);
+      return () => clearInterval(pollInterval);
     } else if (activeTab === 'database') {
       fetchSchemaSql();
     } else if (activeTab === 'audit') {
       fetchAuditLogs();
     }
-  }, [activeTab]);
+  }, [activeTab, session?.access_token]);
 
-  const fetchSessions = async () => {
+  const fetchSessions = async (showLoading = false) => {
     try {
-      setLoadingSessions(true);
+      if (showLoading) setLoadingSessions(true);
       const headers = {};
       if (session?.access_token) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
@@ -84,7 +114,7 @@ export function SettingsManager({ initialTab = 'account' }) {
       }
     } catch {}
     finally {
-      setLoadingSessions(false);
+      if (showLoading) setLoadingSessions(false);
     }
   };
 
@@ -260,7 +290,7 @@ export function SettingsManager({ initialTab = 'account' }) {
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all ${
                 active
                   ? 'bg-teal-500 text-slate-950 font-semibold shadow-glow-teal'
@@ -393,6 +423,9 @@ export function SettingsManager({ initialTab = 'account' }) {
                 {sessions.map((s) => {
                   const isMobile = s.deviceType === 'mobile' || s.deviceType === 'tablet';
                   const DeviceIcon = isMobile ? Smartphone : Laptop;
+                  const activity = formatRelativeActivity(s.lastActiveAt || s.createdAt);
+                  const isLiveNow = s.isCurrent || (activity.isActiveNow && s.lastActiveAt);
+                  const liveLabel = s.isCurrent ? 'Active now' : (isLiveNow ? 'Active now' : activity.label);
 
                   return (
                     <div
@@ -426,7 +459,7 @@ export function SettingsManager({ initialTab = 'account' }) {
                               </Badge>
                             )}
 
-                            {s.isActiveNow ? (
+                            {isLiveNow ? (
                               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
                                 Active now
@@ -434,13 +467,13 @@ export function SettingsManager({ initialTab = 'account' }) {
                             ) : (
                               <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 font-medium">
                                 <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />
-                                {s.lastActiveLabel || 'Active recently'}
+                                {liveLabel}
                               </span>
                             )}
                           </div>
 
                           <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400 font-mono text-[11px]">
-                            {s.ipAddress && s.ipAddress !== 'Unknown IP' && (
+                            {s.ipAddress && s.ipAddress !== 'Unknown IP' && s.ipAddress !== '—' && (
                               <span>IP: {s.ipAddress}</span>
                             )}
                             <span>•</span>
