@@ -33,12 +33,14 @@ export async function GET(request) {
       return timeB - timeA;
     });
 
+    const incomingParsed = parseUserAgent(currentUserAgent);
+
     for (const s of sessions) {
       const parsed = parseUserAgent(s.user_agent || currentUserAgent);
       const isCurrentDevice =
-        s.id === currentSessionId ||
-        s.id === authData.session.id ||
-        (s.user_agent && currentUserAgent && s.user_agent === currentUserAgent);
+        s.id === authData.session?.id ||
+        (s.user_agent && currentUserAgent && s.user_agent.trim() === currentUserAgent.trim()) ||
+        parsed.deviceName === incomingParsed.deviceName;
 
       const deviceKey = isCurrentDevice
         ? '__current_active_device__'
@@ -48,7 +50,7 @@ export async function GET(request) {
         deviceMap.set(deviceKey, { session: s, isCurrent: isCurrentDevice, parsed });
       } else {
         // Stale duplicate record for same device -> mark for deletion
-        if (s.id && s.id !== currentSessionId) {
+        if (s.id && !isCurrentDevice) {
           duplicateIdsToDelete.push(s.id);
         }
       }
@@ -61,10 +63,9 @@ export async function GET(request) {
 
     // If current device was not in DB, add it
     if (!deviceMap.has('__current_active_device__')) {
-      const parsed = parseUserAgent(currentUserAgent);
       deviceMap.set('__current_active_device__', {
         session: {
-          id: currentSessionId || authData.session.id || 'current-session',
+          id: authData.session?.id || 'current-session',
           user_id: authData.user.id,
           user_agent: currentUserAgent,
           ip_address: currentIp,
@@ -73,7 +74,7 @@ export async function GET(request) {
           expires_at: new Date(Date.now() + 14 * 86400000).toISOString(),
         },
         isCurrent: true,
-        parsed,
+        parsed: incomingParsed,
       });
     }
 
