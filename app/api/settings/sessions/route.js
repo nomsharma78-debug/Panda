@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/auth/session';
-import { listUserSessions, recordDeviceSession, revokeSessionById, revokeAllUserSessions } from '@/lib/db/sessions';
+import { listUserSessions, touchDeviceSession, revokeSessionById, revokeAllUserSessions } from '@/lib/db/sessions';
 import { logAuditEvent } from '@/lib/security/audit';
 import { getClientIp } from '@/lib/security/rate-limit';
 import { parseUserAgent, formatRelativeActivity } from '@/lib/utils/device';
@@ -14,14 +14,8 @@ export async function GET(request) {
   const currentUserAgent = request.headers.get('user-agent') || '';
   const currentIp = getClientIp(request);
 
-  // Guarantee current device session is recorded with active timestamp & IP
-  let currentSessionId = null;
-  try {
-    currentSessionId = await recordDeviceSession(authData.user.id, {
-      userAgent: currentUserAgent,
-      ipAddress: currentIp,
-    });
-  } catch {}
+  // Touch current device session in DB (verifies active status)
+  await touchDeviceSession(authData.user.id, currentUserAgent, currentIp).catch(() => {});
 
   try {
     const rawSessions = await listUserSessions(authData.user.id);

@@ -130,15 +130,22 @@ export function AuthProvider({ children }) {
             })
             .catch(() => {});
 
-          // 2. Background verification with live database server
-          supabase.auth.getUser().then(({ data, error }) => {
-            if (error || !data?.user) {
-              purgeLocalAuthStorage();
-              setUser(null);
-              setSession(null);
-              setClientCryptoKey(null);
-            }
-          }).catch(() => {});
+          // 2. Background verification with live database server & revocation check
+          fetch('/api/auth/heartbeat', {
+            headers: { Authorization: `Bearer ${fastSession.access_token}` },
+          })
+            .then(async (r) => {
+              if (r.status === 401) {
+                purgeLocalAuthStorage();
+                const sb = getSupabaseBrowserClient();
+                if (sb) await sb.auth.signOut().catch(() => {});
+                setUser(null);
+                setSession(null);
+                setClientCryptoKey(null);
+                window.location.href = '/login?reason=revoked';
+              }
+            })
+            .catch(() => {});
           return;
         }
       }

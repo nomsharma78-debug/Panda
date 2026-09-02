@@ -4,7 +4,7 @@ import { getAuthenticatedUser } from '@/lib/auth/session';
 export async function GET(request) {
   const authData = await getAuthenticatedUser(request);
   if (!authData || !authData.user) {
-    return NextResponse.json({ authenticated: false, user: null }, { status: 200 });
+    return NextResponse.json({ authenticated: false, user: null }, { status: 401 });
   }
 
   return NextResponse.json({
