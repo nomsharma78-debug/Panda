@@ -47,6 +47,13 @@ export function AppLayout({
     }
   }, [user, loading, router]);
 
+  // Real-time listener for storage additions and deletions
+  useEffect(() => {
+    const handleStorageUpdated = () => fetchStorageSummary();
+    window.addEventListener('panda:storage:updated', handleStorageUpdated);
+    return () => window.removeEventListener('panda:storage:updated', handleStorageUpdated);
+  }, []);
+
   const handleOpenAddVaultItem = (type = 'login') => {
     setVaultInitialType(type);
     setAddVaultModalOpen(true);
