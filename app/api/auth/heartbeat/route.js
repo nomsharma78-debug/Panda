@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/auth/session';
-import { recordDeviceSession, listUserSessions } from '@/lib/db/sessions';
+import { touchDeviceSession } from '@/lib/db/sessions';
 import { getClientIp } from '@/lib/security/rate-limit';
 
 export async function GET(request) {
@@ -12,8 +12,14 @@ export async function GET(request) {
   const userAgent = request.headers.get('user-agent') || '';
   const ip = getClientIp(request);
 
-  // Touch current device session in DB
-  await recordDeviceSession(authData.user.id, { userAgent, ipAddress: ip }).catch(() => {});
+  // Validate that this device session is still active and has NOT been revoked
+  const isAlive = await touchDeviceSession(authData.user.id, userAgent, ip);
+  if (!isAlive) {
+    return NextResponse.json(
+      { authenticated: false, revoked: true, error: 'Session has been revoked from another device.' },
+      { status: 401 }
+    );
+  }
 
   return NextResponse.json({
     authenticated: true,

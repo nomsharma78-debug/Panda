@@ -213,6 +213,44 @@ export function AuthProvider({ children }) {
   }, [checkAuth]);
 
   /**
+   * Live Session Presence & Immediate Revocation Watchdog
+   * Checks every 5s (and on window focus) if this device was revoked from another device.
+   */
+  useEffect(() => {
+    if (!user) return;
+
+    const checkRevocationStatus = async () => {
+      try {
+        const headers = {};
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+        const res = await fetch('/api/auth/heartbeat', { headers });
+        if (res.status === 401) {
+          // Session was revoked from another device! Immediately kick to login
+          purgeLocalAuthStorage();
+          const supabase = getSupabaseBrowserClient();
+          if (supabase) {
+            await supabase.auth.signOut().catch(() => {});
+          }
+          setUser(null);
+          setSession(null);
+          setClientCryptoKey(null);
+          router.replace('/login');
+        }
+      } catch {}
+    };
+
+    const interval = setInterval(checkRevocationStatus, 5000);
+    window.addEventListener('focus', checkRevocationStatus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', checkRevocationStatus);
+    };
+  }, [user, session?.access_token, router]);
+
+  /**
    * Automatic Inactivity Detector & Logout Timer
    */
   useEffect(() => {
