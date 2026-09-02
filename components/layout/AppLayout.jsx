@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { MobileNav } from './MobileNav';
+import { MobileBottomBar } from './MobileBottomBar';
 import { useAuth } from '@/components/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { MediaUploadModal } from '@/components/media/MediaUploadModal';
@@ -88,10 +89,13 @@ export function AppLayout({
           searchPlaceholder={searchPlaceholder}
         />
 
-        <main className="flex-1 p-4 sm:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-4 sm:p-8 pb-28 md:pb-8 max-w-7xl w-full mx-auto">
           {children}
         </main>
       </div>
+
+      {/* iOS / Instagram Style Floating Glass Mobile Bottom Bar */}
+      <MobileBottomBar />
 
       {/* Global Modals */}
       <MediaUploadModal
