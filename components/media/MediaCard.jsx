@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Play,
   FileText,
@@ -26,8 +26,9 @@ export function MediaCard({
   const targetMedia = media || item || {};
   const [blobUrl, setBlobUrl] = useState(null);
   const [imgLoading, setImgLoading] = useState(true);
-  const [imgError, setImgError] = useState(false);
+  const [imgError, setImgError] = useState(null); // null or error string
   const prevBlobRef = useRef(null);
+  const retryCountRef = useRef(0);
 
   const isPhoto = targetMedia.media_type === 'photo';
   const isVideo = targetMedia.media_type === 'video';
@@ -39,16 +40,16 @@ export function MediaCard({
   const downloadUrl = targetMedia.id ? `/api/media/${targetMedia.id}/download${tokenParam}` : '';
 
   // Fetch photo as blob for stable, reliable display
-  useEffect(() => {
+  const loadImage = useCallback(() => {
     if (!isPhoto || !targetMedia.id) {
       setBlobUrl(null);
       setImgLoading(false);
-      return;
+      return () => {};
     }
 
     let cancelled = false;
     setImgLoading(true);
-    setImgError(false);
+    setImgError(null);
 
     const mediaUrl = `/api/media/${targetMedia.id}/access`;
     const fetchHeaders = {};
@@ -57,8 +58,12 @@ export function MediaCard({
     }
 
     fetch(mediaUrl, { headers: fetchHeaders, credentials: 'include' })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      .then(async (res) => {
+        if (!res.ok) {
+          // Try to get the error body for debugging
+          const errText = await res.text().catch(() => '');
+          throw new Error(`${res.status} ${errText.slice(0, 100)}`);
+        }
         return res.blob();
       })
       .then((blob) => {
@@ -70,21 +75,34 @@ export function MediaCard({
           prevBlobRef.current = url;
           setBlobUrl(url);
           setImgLoading(false);
-          setImgError(false);
+          setImgError(null);
+          retryCountRef.current = 0;
         }
       })
       .catch((err) => {
         if (!cancelled) {
-          console.error('[MediaCard] Failed to load image:', err.message);
-          setImgError(true);
+          console.error('[MediaCard] Image load failed:', targetMedia.id, err.message);
+          setImgError(err.message);
           setImgLoading(false);
+          // Auto-retry once after 2 seconds if auth error (token may not be ready yet)
+          if (retryCountRef.current < 1 && err.message.includes('401')) {
+            retryCountRef.current++;
+            setTimeout(() => {
+              if (!cancelled) loadImage();
+            }, 2000);
+          }
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [targetMedia.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isPhoto, targetMedia.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const cleanup = loadImage();
+    return cleanup;
+  }, [loadImage]);
 
   // Cleanup blob URL on unmount
   useEffect(() => {
@@ -115,12 +133,17 @@ export function MediaCard({
             <div className="w-full h-full flex items-center justify-center">
               <div className="w-8 h-8 rounded-full border-2 border-teal-500/40 border-t-teal-500 animate-spin" />
             </div>
-          ) : imgError || !blobUrl ? (
-            <div className="flex flex-col items-center justify-center gap-2 p-4 text-center">
-              <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 text-slate-500 flex items-center justify-center">
-                <ImageOff className="w-6 h-6" />
+          ) : imgError ? (
+            <div
+              className="flex flex-col items-center justify-center gap-1.5 p-3 text-center cursor-pointer"
+              onClick={(e) => { e.stopPropagation(); retryCountRef.current = 0; loadImage(); }}
+              title="Tap to retry"
+            >
+              <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 text-slate-500 flex items-center justify-center">
+                <ImageOff className="w-5 h-5" />
               </div>
-              <span className="text-[10px] text-slate-500 font-mono">Could not load</span>
+              <span className="text-[9px] text-slate-500 font-mono leading-tight max-w-full break-all">{imgError}</span>
+              <span className="text-[9px] text-teal-400 font-semibold">Tap to retry</span>
             </div>
           ) : (
             <img
