@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { formatBytes } from '@/components/ui/Progress';
 import { useAuth } from '@/components/context/AuthContext';
+import { mediaBlobCache } from '@/lib/client-cache';
 
 export function MediaCard({
   media,
@@ -22,19 +23,20 @@ export function MediaCard({
   onClick,
   onDelete,
 }) {
-  const { session } = useAuth();
+  const { session, loading: authLoading } = useAuth();
   const targetMedia = media || item || {};
-  const [blobUrl, setBlobUrl] = useState(null);
-  const [imgLoading, setImgLoading] = useState(true);
-  const [imgError, setImgError] = useState(null); // null or error string
-  const prevBlobRef = useRef(null);
-  const retryCountRef = useRef(0);
-
   const isPhoto = targetMedia.media_type === 'photo';
   const isVideo = targetMedia.media_type === 'video';
   const isPdf = targetMedia.media_type === 'pdf';
 
-  // Build access URL with token for authenticated fetch
+  // Read from in-memory blob cache immediately
+  const cachedUrl = isPhoto && targetMedia.id ? mediaBlobCache.get(targetMedia.id) : null;
+  const [blobUrl, setBlobUrl] = useState(cachedUrl);
+  const [imgLoading, setImgLoading] = useState(!cachedUrl && isPhoto);
+  const [imgError, setImgError] = useState(null);
+  const retryCountRef = useRef(0);
+
+  // Build access URL with token for video/download
   const tokenParam = session?.access_token ? `?token=${encodeURIComponent(session.access_token)}` : '';
   const accessUrl = targetMedia.id ? `/api/media/${targetMedia.id}/access${tokenParam}` : '';
   const downloadUrl = targetMedia.id ? `/api/media/${targetMedia.id}/download${tokenParam}` : '';
@@ -47,11 +49,21 @@ export function MediaCard({
       return () => {};
     }
 
+    // If already in memory cache, use it directly (0ms)
+    const inCache = mediaBlobCache.get(targetMedia.id);
+    if (inCache) {
+      setBlobUrl(inCache);
+      setImgLoading(false);
+      setImgError(null);
+      return () => {};
+    }
+
     let cancelled = false;
     setImgLoading(true);
     setImgError(null);
 
-    const mediaUrl = `/api/media/${targetMedia.id}/access`;
+    const tokenQuery = session?.access_token ? `?token=${encodeURIComponent(session.access_token)}` : '';
+    const mediaUrl = `/api/media/${targetMedia.id}/access${tokenQuery}`;
     const fetchHeaders = {};
     if (session?.access_token) {
       fetchHeaders['Authorization'] = `Bearer ${session.access_token}`;
@@ -60,19 +72,15 @@ export function MediaCard({
     fetch(mediaUrl, { headers: fetchHeaders, credentials: 'include' })
       .then(async (res) => {
         if (!res.ok) {
-          // Try to get the error body for debugging
           const errText = await res.text().catch(() => '');
-          throw new Error(`${res.status} ${errText.slice(0, 100)}`);
+          throw new Error(`${res.status} ${errText.slice(0, 80)}`);
         }
         return res.blob();
       })
       .then((blob) => {
         if (!cancelled) {
           const url = URL.createObjectURL(blob);
-          if (prevBlobRef.current) {
-            URL.revokeObjectURL(prevBlobRef.current);
-          }
-          prevBlobRef.current = url;
+          mediaBlobCache.set(targetMedia.id, url);
           setBlobUrl(url);
           setImgLoading(false);
           setImgError(null);
@@ -84,12 +92,12 @@ export function MediaCard({
           console.error('[MediaCard] Image load failed:', targetMedia.id, err.message);
           setImgError(err.message);
           setImgLoading(false);
-          // Auto-retry once after 2 seconds if auth error (token may not be ready yet)
+          // Auto-retry once after 1.5s if 401 (auth might still be initializing)
           if (retryCountRef.current < 1 && err.message.includes('401')) {
             retryCountRef.current++;
             setTimeout(() => {
               if (!cancelled) loadImage();
-            }, 2000);
+            }, 1500);
           }
         }
       });
@@ -97,21 +105,13 @@ export function MediaCard({
     return () => {
       cancelled = true;
     };
-  }, [isPhoto, targetMedia.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isPhoto, targetMedia.id, session?.access_token]);
 
   useEffect(() => {
     const cleanup = loadImage();
     return cleanup;
   }, [loadImage]);
 
-  // Cleanup blob URL on unmount
-  useEffect(() => {
-    return () => {
-      if (prevBlobRef.current) {
-        URL.revokeObjectURL(prevBlobRef.current);
-      }
-    };
-  }, []);
 
   const timeStr = targetMedia.uploaded_at
     ? new Date(targetMedia.uploaded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })

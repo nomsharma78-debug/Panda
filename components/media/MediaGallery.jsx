@@ -95,7 +95,23 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     } catch {}
   }, [getHeaders]);
 
-  // Fast fetch: only media + folders — NEVER shows skeleton after first load
+  const handleNavigateFolder = useCallback((folder) => {
+    setCurrentFolder(folder);
+    const key = folder ? `media:folder:${folder.id}` : 'media:root';
+    const cached = pandaCache.get(key);
+    if (cached) {
+      setFolders(cached.folders || []);
+      setMediaList(cached.items || []);
+      setLoading(false);
+    } else {
+      // Clear view immediately so old folder items don't linger for seconds!
+      setFolders([]);
+      setMediaList([]);
+      setLoading(true);
+    }
+  }, []);
+
+  // Fast fetch: only media + folders
   const fetchContent = useCallback(async (opts = {}) => {
     const { folder = currentFolder, filter = activeFilter, search = searchQuery } = opts;
 
@@ -104,10 +120,6 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     const controller = new AbortController();
     abortRef.current = controller;
     const signal = controller.signal;
-
-    // Only show full skeleton on the very first load
-    const isFirstLoad = !firstLoadDoneRef.current;
-    if (isFirstLoad) setLoading(true);
 
     try {
       const params = new URLSearchParams();
@@ -126,8 +138,8 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
 
       if (!mountedRef.current || signal.aborted) return;
 
-      let newFolders = folders;
-      let newItems = mediaList;
+      let newFolders = [];
+      let newItems = [];
 
       if (foldersRes.ok) {
         const data = await foldersRes.json();
@@ -145,9 +157,10 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         }
       }
 
-      // Cache root view for instant display next visit
-      if (!folder && filter === 'all' && !search) {
-        pandaCache.set('media:root', { items: newItems, folders: newFolders }, 30_000);
+      // Cache folder view for instant display next visit
+      if (filter === 'all' && !search) {
+        const key = folder ? `media:folder:${folder.id}` : 'media:root';
+        pandaCache.set(key, { items: newItems, folders: newFolders }, 45_000);
       }
     } catch (err) {
       if (err.name !== 'AbortError') {
@@ -159,7 +172,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         setLoading(false);
       }
     }
-  }, [currentFolder, activeFilter, searchQuery, getHeaders]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentFolder, activeFilter, searchQuery, getHeaders]);
 
   // On mount: check storage + load content in parallel
   useEffect(() => {
@@ -173,9 +186,17 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-fetch when folder/filter/search changes — silent (no skeleton)
+  // When auth session/token resolves or updates, silently refresh content
   useEffect(() => {
-    if (!firstLoadDoneRef.current) return; // handled by mount effect
+    if (session?.access_token && firstLoadDoneRef.current) {
+      fetchContent({});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.access_token]);
+
+  // Re-fetch when folder/filter/search changes
+  useEffect(() => {
+    if (!firstLoadDoneRef.current) return;
     fetchContent({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentFolder, activeFilter, searchQuery]);
@@ -190,7 +211,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
           return [...toAdd, ...prev];
         });
       }
-      pandaCache.invalidate('media:root');
+      pandaCache.invalidatePrefix('media:');
       fetchContent({});
     };
 
@@ -433,7 +454,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
           <div className="flex items-center gap-2 text-slate-400 overflow-x-auto scrollbar-none">
             <button
               type="button"
-              onClick={() => setCurrentFolder(null)}
+              onClick={() => handleNavigateFolder(null)}
               className={`flex items-center gap-1 hover:text-white transition-colors ${
                 !currentFolder ? 'font-bold text-teal-400' : ''
               }`}
@@ -456,7 +477,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
           {currentFolder && (
             <button
               type="button"
-              onClick={() => setCurrentFolder(null)}
+              onClick={() => handleNavigateFolder(null)}
               className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-white transition-colors"
             >
               <ArrowLeft className="w-3 h-3" />
@@ -565,7 +586,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
                   <FolderCard
                     key={folder.id}
                     folder={folder}
-                    onOpen={(f) => setCurrentFolder(f)}
+                    onOpen={(f) => handleNavigateFolder(f)}
                     onDelete={(f) => setDeleteFolderTarget(f)}
                     onRename={() => {}}
                   />

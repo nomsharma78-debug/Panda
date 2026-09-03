@@ -22,6 +22,7 @@ import { VideoPlayer } from './VideoPlayer';
 import { formatBytes } from '@/components/ui/Progress';
 import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/components/context/AuthContext';
+import { mediaBlobCache } from '@/lib/client-cache';
 
 export function MediaLightbox({
   mediaList = [],
@@ -66,12 +67,22 @@ export function MediaLightbox({
       return;
     }
 
+    // Check in-memory cache first (0ms instant preview)
+    const cached = mediaBlobCache.get(currentItem.id);
+    if (cached) {
+      setPhotoBlobUrl(cached);
+      setPhotoLoading(false);
+      setPhotoError(false);
+      return;
+    }
+
     let cancelled = false;
     setPhotoLoading(true);
     setPhotoError(false);
     setPhotoBlobUrl(null);
 
-    const mediaUrl = `/api/media/${currentItem.id}/access`;
+    const tokenQuery = session?.access_token ? `?token=${encodeURIComponent(session.access_token)}` : '';
+    const mediaUrl = `/api/media/${currentItem.id}/access${tokenQuery}`;
 
     fetch(mediaUrl, {
       headers: session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {},
@@ -84,8 +95,7 @@ export function MediaLightbox({
       .then((blob) => {
         if (!cancelled) {
           const objectUrl = URL.createObjectURL(blob);
-          if (prevBlobRef.current) URL.revokeObjectURL(prevBlobRef.current);
-          prevBlobRef.current = objectUrl;
+          mediaBlobCache.set(currentItem.id, objectUrl);
           setPhotoBlobUrl(objectUrl);
           setPhotoLoading(false);
         }
@@ -100,7 +110,7 @@ export function MediaLightbox({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, currentItem?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOpen, currentItem?.id, session?.access_token]);
 
   // Revoke blob on unmount or close
   useEffect(() => {
