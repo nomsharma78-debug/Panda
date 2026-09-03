@@ -147,8 +147,14 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       if (mediaRes.ok) {
         const data = await mediaRes.json();
         newItems = data.items || [];
-        setMediaList(newItems);
-        if (filter === 'all' && !search) {
+        setMediaList((prev) => {
+          // If server returned items, use them; if server returned 0 items but we already had items and no filter/search, keep previous
+          if (newItems.length > 0 || (filter !== 'all' || search)) {
+            return newItems;
+          }
+          return prev.length > 0 ? prev : newItems;
+        });
+        if (filter === 'all' && !search && newItems.length > 0) {
           const key = folder ? `media:folder:${folder.id}` : 'media:root';
           pandaCache.set(key, { items: newItems, folders: newFolders }, 45_000);
         }
@@ -184,7 +190,6 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     const handleStorageUpdated = () => {
       pandaCache.invalidate('storage:connections');
       checkStorage(true);
-      fetchContent({});
     };
 
     window.addEventListener('panda:media:uploaded', handleMediaUploaded);

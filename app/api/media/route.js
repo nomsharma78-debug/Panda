@@ -31,13 +31,13 @@ export async function GET(request) {
       offset,
     });
 
-    // Auto-discover files in connected cloud storage ONLY when explicit sync=true is requested
-    const shouldSync = searchParams.get('sync') === 'true';
+    // Auto-discover files in connected cloud storage if DB has 0 items or explicit sync requested
+    const shouldSync = searchParams.get('sync') === 'true' || (items.length === 0 && (!folderIdParam || folderIdParam === 'root') && mediaType === 'all' && !search);
     if (shouldSync) {
       try {
         const synced = await StorageManager.syncStorageMedia(authData.user.id, token);
         if (synced && synced.length > 0) {
-          items = await listUserMedia(authData.user.id, {
+          const reloaded = await listUserMedia(authData.user.id, {
             token,
             mediaType,
             folderId,
@@ -45,8 +45,11 @@ export async function GET(request) {
             limit,
             offset,
           });
+          items = reloaded.length > 0 ? reloaded : synced;
         }
-      } catch {}
+      } catch (syncErr) {
+        console.warn('[API media] sync notice:', syncErr.message);
+      }
     }
 
     return NextResponse.json(
