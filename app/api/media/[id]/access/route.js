@@ -17,15 +17,19 @@ export async function GET(request, { params }) {
     return new Response(buffer, {
       status: 200,
       headers: {
-        'Content-Type': mimeType,
+        'Content-Type': mimeType || 'application/octet-stream',
         'Content-Length': String(size),
-        'Content-Disposition': `inline; filename="${encodeURIComponent(filename)}"`,
+        'Content-Disposition': `inline; filename="${encodeURIComponent(filename || 'file')}"`,
         'Cache-Control': 'private, max-age=300',
         'X-Content-Type-Options': 'nosniff',
       },
     });
   } catch (err) {
     console.error('[media/access] getMediaBinary error:', err.message, '| userId:', authData.user.id, '| mediaId:', id);
-    return NextResponse.json({ error: 'Media file not found or unauthorized' }, { status: 404 });
+    const isNotFound = err.message.includes('not found') || err.message.includes('unauthorized');
+    return NextResponse.json(
+      { error: err.message || 'Media file not found or unauthorized' },
+      { status: isNotFound ? 404 : 500 }
+    );
   }
 }
