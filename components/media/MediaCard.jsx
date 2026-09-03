@@ -36,15 +36,14 @@ export function MediaCard({
 
   // Read from in-memory blob cache immediately
   const cachedUrl = isPhoto && targetMedia.id ? mediaBlobCache.get(targetMedia.id) : null;
-  const [blobUrl, setBlobUrl] = useState(cachedUrl);
-  const [imgLoading, setImgLoading] = useState(!cachedUrl && isPhoto);
+  const tokenParam = session?.access_token ? `?token=${encodeURIComponent(session.access_token)}` : '';
+  const accessUrl = targetMedia.url || (targetMedia.id ? `/api/media/${targetMedia.id}/access${tokenParam}` : '');
+  const downloadUrl = targetMedia.downloadUrl || (targetMedia.id ? `/api/media/${targetMedia.id}/download${tokenParam}` : '');
+
+  const [blobUrl, setBlobUrl] = useState(cachedUrl || accessUrl);
+  const [imgLoading, setImgLoading] = useState(!cachedUrl && !accessUrl && isPhoto);
   const [imgError, setImgError] = useState(null);
   const retryCountRef = useRef(0);
-
-  // Build access URL with token for video/download
-  const tokenParam = session?.access_token ? `?token=${encodeURIComponent(session.access_token)}` : '';
-  const accessUrl = targetMedia.id ? `/api/media/${targetMedia.id}/access${tokenParam}` : '';
-  const downloadUrl = targetMedia.id ? `/api/media/${targetMedia.id}/download${tokenParam}` : '';
 
   // Fetch photo as blob for stable, reliable display
   const loadImage = useCallback(() => {
@@ -54,7 +53,6 @@ export function MediaCard({
       return () => {};
     }
 
-    // If already in memory cache, use it directly (0ms)
     const inCache = mediaBlobCache.get(targetMedia.id);
     if (inCache) {
       setBlobUrl(inCache);
@@ -64,11 +62,7 @@ export function MediaCard({
     }
 
     let cancelled = false;
-    setImgLoading(true);
-    setImgError(null);
-
-    const tokenQuery = session?.access_token ? `?token=${encodeURIComponent(session.access_token)}` : '';
-    const mediaUrl = `/api/media/${targetMedia.id}/access${tokenQuery}`;
+    const mediaUrl = targetMedia.url || `/api/media/${targetMedia.id}/access${tokenParam}`;
     const fetchHeaders = {};
     if (session?.access_token) {
       fetchHeaders['Authorization'] = `Bearer ${session.access_token}`;
@@ -78,7 +72,7 @@ export function MediaCard({
       .then(async (res) => {
         if (!res.ok) {
           const errText = await res.text().catch(() => '');
-          throw new Error(`${res.status} ${errText.slice(0, 80)}`);
+          throw new Error(`${res.status} ${errText.slice(0, 60)}`);
         }
         return res.blob();
       })
@@ -94,15 +88,13 @@ export function MediaCard({
       })
       .catch((err) => {
         if (!cancelled) {
-          console.error('[MediaCard] Image load failed:', targetMedia.id, err.message);
-          setImgError(err.message);
-          setImgLoading(false);
-          // Auto-retry once after 1.5s if 401 (auth might still be initializing)
-          if (retryCountRef.current < 1 && err.message.includes('401')) {
-            retryCountRef.current++;
-            setTimeout(() => {
-              if (!cancelled) loadImage();
-            }, 1500);
+          // If fetch failed, still allow direct accessUrl on img tag before showing error
+          if (accessUrl) {
+            setBlobUrl(accessUrl);
+            setImgLoading(false);
+          } else {
+            setImgError(err.message);
+            setImgLoading(false);
           }
         }
       });
@@ -110,13 +102,12 @@ export function MediaCard({
     return () => {
       cancelled = true;
     };
-  }, [isPhoto, targetMedia.id, session?.access_token]);
+  }, [isPhoto, targetMedia.id, targetMedia.url, tokenParam, session?.access_token, accessUrl]);
 
   useEffect(() => {
     const cleanup = loadImage();
     return cleanup;
   }, [loadImage]);
-
 
   const timeStr = targetMedia.uploaded_at
     ? new Date(targetMedia.uploaded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -141,7 +132,7 @@ export function MediaCard({
           ) : imgError ? (
             <div
               className="flex flex-col items-center justify-center gap-1.5 p-3 text-center cursor-pointer"
-              onClick={(e) => { e.stopPropagation(); retryCountRef.current = 0; loadImage(); }}
+              onClick={(e) => { e.stopPropagation(); setImgError(null); retryCountRef.current = 0; loadImage(); }}
               title="Tap to retry"
             >
               <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 text-slate-500 flex items-center justify-center">
@@ -152,9 +143,16 @@ export function MediaCard({
             </div>
           ) : (
             <img
-              src={blobUrl}
+              src={blobUrl || accessUrl}
               alt={targetMedia.original_filename || 'Photo'}
               loading="lazy"
+              onError={() => {
+                if (!imgError) setImgError('Failed to load image');
+              }}
+              onLoad={() => {
+                setImgLoading(false);
+                setImgError(null);
+              }}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
           )
