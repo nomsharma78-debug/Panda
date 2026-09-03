@@ -54,8 +54,11 @@ export async function POST(request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
+
     // Upload and encrypt through StorageManager
     const mediaRecord = await StorageManager.uploadMedia(authData.user.id, {
+      token,
       fileBuffer: buffer,
       originalFilename,
       mimeType,

@@ -9,10 +9,11 @@ export async function GET(request, { params }) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
   const { id } = await params;
 
   try {
-    const { buffer, mimeType, filename, size } = await StorageManager.getMediaBinary(authData.user.id, id);
+    const { buffer, mimeType, filename, size } = await StorageManager.getMediaBinary(authData.user.id, id, token);
 
     return new Response(buffer, {
       status: 200,

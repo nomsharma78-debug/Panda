@@ -17,11 +17,11 @@ export async function GET(request) {
   if (folderIdParam === 'root') folderId = null;
   else if (folderIdParam) folderId = folderIdParam;
 
-  const limit = parseInt(searchParams.get('limit') || '500', 10);
-  const offset = parseInt(searchParams.get('offset') || '0', 10);
+  const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
 
   try {
     let items = await listUserMedia(authData.user.id, {
+      token,
       mediaType,
       folderId,
       search,
@@ -32,9 +32,10 @@ export async function GET(request) {
     // Auto-discover any files present in connected cloud storage if list is empty
     if (items.length === 0 && !search && mediaType === 'all') {
       try {
-        const synced = await StorageManager.syncStorageMedia(authData.user.id);
+        const synced = await StorageManager.syncStorageMedia(authData.user.id, token);
         if (synced && synced.length > 0) {
           items = await listUserMedia(authData.user.id, {
+            token,
             mediaType,
             folderId,
             search,
