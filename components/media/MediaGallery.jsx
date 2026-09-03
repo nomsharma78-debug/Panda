@@ -75,21 +75,17 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     return h;
   }, [session?.access_token]);
 
-  // Check storage from cache or network
-  const checkStorage = useCallback(async (force = false) => {
-    const cached = pandaCache.get('storage:connections');
-    if (!force && cached) {
-      setHasStorage((cached.connections || []).length > 0);
-      return;
-    }
+  // Check storage from live API
+  const checkStorage = useCallback(async (force = true) => {
     try {
       const headers = { 'Cache-Control': 'no-cache' };
       if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
       const res = await fetch('/api/storage', { headers, credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
+        const hasActiveConns = Array.isArray(data.connections) && data.connections.length > 0;
         pandaCache.set('storage:connections', data, 60_000);
-        setHasStorage((data.connections || []).length > 0);
+        setHasStorage(hasActiveConns);
       }
     } catch {}
   }, [session?.access_token]);
