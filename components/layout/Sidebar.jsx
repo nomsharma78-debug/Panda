@@ -120,14 +120,14 @@ export function Sidebar({ storageMetrics = null }) {
               <span>Storage</span>
             </span>
             <span className="text-slate-400 group-hover:text-teal-300 text-[11px] font-mono">
-              {storageMetrics
+              {storageMetrics && storageMetrics.providerCount > 0
                 ? storageMetrics.totalBytes
                   ? `${formatBytes(storageMetrics.usedBytes)} / ${formatBytes(storageMetrics.totalBytes)}`
                   : `${formatBytes(storageMetrics.usedBytes)} stored`
-                : 'Cloud Storage'}
+                : 'Not Connected'}
             </span>
           </div>
-          {storageMetrics?.totalBytes && (
+          {storageMetrics?.providerCount > 0 && storageMetrics?.totalBytes && (
             <Progress
               value={storageMetrics.usedBytes}
               max={storageMetrics.totalBytes}

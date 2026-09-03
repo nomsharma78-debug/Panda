@@ -183,18 +183,18 @@ export function StorageManager({ onOpenAddModal }) {
           </div>
 
           <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-            {combinedMetrics
-              ? combinedMetrics.totalBytes
-                ? `${formatBytes(combinedMetrics.usedBytes)} used of ${formatBytes(combinedMetrics.totalBytes)}`
-                : `${formatBytes(combinedMetrics.usedBytes)} used across cloud storage`
-              : '0 B used'}
+            {connections.length > 0 && combinedMetrics?.totalBytes
+              ? `${formatBytes(combinedMetrics.usedBytes)} used of ${formatBytes(combinedMetrics.totalBytes)}`
+              : connections.length > 0
+              ? `${formatBytes(combinedMetrics?.usedBytes || 0)} used across cloud storage`
+              : '0 B used (No Cloud Storage Connected)'}
           </h2>
 
           <p className="text-xs text-slate-400 leading-relaxed">
             All your connected cloud buckets are unified into one seamless personal media library. Panda stores metadata in PostgreSQL while raw encrypted files remain in your cloud storage.
           </p>
 
-          {combinedMetrics?.totalBytes && (
+          {connections.length > 0 && combinedMetrics?.totalBytes && (
             <div className="pt-2">
               <Progress
                 value={combinedMetrics.usedBytes}
