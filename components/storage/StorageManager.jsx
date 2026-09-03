@@ -45,9 +45,6 @@ export function StorageManager({ onOpenAddModal }) {
   const [disconnectTarget, setDisconnectTarget] = useState(null);
 
   const fetchStorageData = useCallback(async (force = false) => {
-    // If we have a fresh cache and caller didn't force, skip the network call
-    if (!force && pandaCache.get(CACHE_KEY)) return;
-
     const headers = { 'Cache-Control': 'no-cache' };
     if (session?.access_token) {
       headers['Authorization'] = `Bearer ${session.access_token}`;
@@ -68,10 +65,8 @@ export function StorageManager({ onOpenAddModal }) {
   }, [session?.access_token]);
 
   useEffect(() => {
-    // Always do a background refresh on mount (silent if cached data shown)
-    fetchStorageData(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    fetchStorageData(true);
+  }, [session?.access_token, fetchStorageData]);
 
   // Listen to global updates — invalidate cache and refetch
   useEffect(() => {

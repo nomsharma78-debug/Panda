@@ -26,9 +26,11 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { useToast } from '@/components/context/ToastContext';
+import { useAuth } from '@/components/context/AuthContext';
 import { PROVIDER_METADATA } from '@/lib/storage/provider-metadata';
 
 export function AddStorageModal({ isOpen, onClose, onStorageAdded }) {
+  const { session } = useAuth();
   const { success, error: toastError } = useToast();
 
   // Modal Stage: 'select' (Stage 1) | 'configure' (Stage 2)
@@ -131,9 +133,13 @@ export function AddStorageModal({ isOpen, onClose, onStorageAdded }) {
     };
 
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
       const res = await fetch('/api/storage/test', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(payload),
       });
 
@@ -185,9 +191,13 @@ export function AddStorageModal({ isOpen, onClose, onStorageAdded }) {
     };
 
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
       const res = await fetch('/api/storage', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(payload),
       });
 
