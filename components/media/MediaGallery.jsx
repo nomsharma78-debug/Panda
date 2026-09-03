@@ -340,8 +340,8 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   const handleUploadClick = () => {
     if (!hasStorage) {
       if (onOpenConnectStorage) onOpenConnectStorage();
-    } else {
-      onOpenUpload();
+    } else if (onOpenUpload) {
+      onOpenUpload(currentFolder?.id || null);
     }
   };
 
@@ -602,7 +602,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
                 <Button variant="secondary" size="sm" icon={FolderPlus} onClick={() => setCreateFolderOpen(true)}>
                   New Folder
                 </Button>
-                <Button variant="primary" size="sm" icon={Upload} onClick={onOpenUpload}>
+                <Button variant="primary" size="sm" icon={Upload} onClick={() => onOpenUpload && onOpenUpload(currentFolder?.id || null)}>
                   Upload File
                 </Button>
               </div>

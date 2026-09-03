@@ -53,6 +53,50 @@ export function SettingsManager({ initialTab = 'account' }) {
     router.replace(`/settings?tab=${tabId}`, { scroll: false });
   };
 
+  // Profile state
+  const [fullName, setFullName] = useState(user?.name || '');
+  const [isSavingName, setIsSavingName] = useState(false);
+
+  useEffect(() => {
+    if (user?.name) {
+      setFullName(user.name);
+    }
+  }, [user?.name]);
+
+  const handleSaveProfile = async (e) => {
+    if (e) e.preventDefault();
+    if (!fullName.trim()) {
+      toastError('Please enter your full name');
+      return;
+    }
+    setIsSavingName(true);
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      const res = await fetch('/api/settings/profile', {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({ name: fullName.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        success('Profile name saved successfully!');
+        setTimeout(() => {
+          window.location.reload();
+        }, 800);
+      } else {
+        toastError(data.error || 'Failed to update name');
+      }
+    } catch {
+      toastError('Network error saving name');
+    } finally {
+      setIsSavingName(false);
+    }
+  };
+
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -317,10 +361,25 @@ export function SettingsManager({ initialTab = 'account' }) {
 
           <div className="space-y-4 text-xs">
             <div>
-              <span className="text-slate-400 block mb-1">Full Name</span>
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-white font-semibold">
-                {user?.name || user?.email?.split('@')[0] || 'Not set'}
-              </div>
+              <span className="text-slate-400 block mb-1 font-medium">Full Name</span>
+              <form onSubmit={handleSaveProfile} className="flex gap-2">
+                <Input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Enter your full name"
+                  className="flex-1"
+                />
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="md"
+                  disabled={isSavingName || !fullName.trim() || fullName.trim() === user?.name}
+                  isLoading={isSavingName}
+                >
+                  Save Name
+                </Button>
+              </form>
             </div>
 
             <div>
