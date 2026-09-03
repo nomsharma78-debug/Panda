@@ -11,6 +11,10 @@ import { MediaUploadModal } from '@/components/media/MediaUploadModal';
 import { AddVaultItemModal } from '@/components/vault/AddVaultItemModal';
 import { AddStorageModal } from '@/components/storage/AddStorageModal';
 
+import { pandaCache } from '@/lib/client-cache';
+
+const METRICS_CACHE_KEY = 'storage:metrics';
+
 export function AppLayout({
   children,
   title = 'Panda Vault',
@@ -26,10 +30,21 @@ export function AppLayout({
   const [addVaultModalOpen, setAddVaultModalOpen] = useState(false);
   const [vaultInitialType, setVaultInitialType] = useState('login');
   const [addStorageModalOpen, setAddStorageModalOpen] = useState(false);
-  const [storageMetrics, setStorageMetrics] = useState(null);
 
-  // Fetch storage metrics for the sidebar widget
-  const fetchStorageSummary = async () => {
+  // Initialize from cache immediately — 0ms render without re-fetching
+  const cachedMetrics = pandaCache.get(METRICS_CACHE_KEY) || pandaCache.get('storage:connections')?.combined;
+  const [storageMetrics, setStorageMetrics] = useState(cachedMetrics || null);
+
+  // Fetch storage metrics from backend API
+  const fetchStorageSummary = async (force = false) => {
+    if (!force) {
+      const cached = pandaCache.get(METRICS_CACHE_KEY) || pandaCache.get('storage:connections')?.combined;
+      if (cached) {
+        setStorageMetrics(cached);
+        return;
+      }
+    }
+
     try {
       const headers = {};
       if (session?.access_token) {
@@ -38,7 +53,10 @@ export function AppLayout({
       const res = await fetch('/api/storage', { headers, credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
-        setStorageMetrics(data.combined);
+        if (data.combined) {
+          pandaCache.set(METRICS_CACHE_KEY, data.combined, 60_000);
+          setStorageMetrics(data.combined);
+        }
       }
     } catch {}
   };
@@ -47,13 +65,16 @@ export function AppLayout({
     if (!loading && !user) {
       router.push('/login');
     } else if (user) {
-      fetchStorageSummary();
+      fetchStorageSummary(false);
     }
   }, [user, loading, router]);
 
   // Real-time listener for storage additions, deletions, and media uploads
   useEffect(() => {
-    const handleStorageUpdated = () => fetchStorageSummary();
+    const handleStorageUpdated = () => {
+      pandaCache.invalidate(METRICS_CACHE_KEY);
+      fetchStorageSummary(true);
+    };
     window.addEventListener('panda:storage:updated', handleStorageUpdated);
     window.addEventListener('panda:media:uploaded', handleStorageUpdated);
     return () => {
