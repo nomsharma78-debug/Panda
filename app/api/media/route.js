@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/auth/session';
 import { listUserMedia } from '@/lib/db/media';
+import { StorageManager } from '@/lib/storage/storage-manager';
 
 export async function GET(request) {
   const authData = await getAuthenticatedUser(request);
@@ -20,13 +21,29 @@ export async function GET(request) {
   const offset = parseInt(searchParams.get('offset') || '0', 10);
 
   try {
-    const items = await listUserMedia(authData.user.id, {
+    let items = await listUserMedia(authData.user.id, {
       mediaType,
       folderId,
       search,
       limit,
       offset,
     });
+
+    // Auto-discover any files present in connected cloud storage if list is empty
+    if (items.length === 0 && !search && mediaType === 'all') {
+      try {
+        const synced = await StorageManager.syncStorageMedia(authData.user.id);
+        if (synced && synced.length > 0) {
+          items = await listUserMedia(authData.user.id, {
+            mediaType,
+            folderId,
+            search,
+            limit,
+            offset,
+          });
+        }
+      } catch {}
+    }
 
     return NextResponse.json(
       {
