@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/auth/session';
-import { listUserStorageConnections, createStorageConnection, getCombinedStorageMetrics } from '@/lib/db/storage';
+import {
+  listUserStorageConnections,
+  createStorageConnection,
+  getCombinedStorageMetrics,
+  getStorageConnectionInternal,
+  updateStorageUsage,
+} from '@/lib/db/storage';
 import { encryptData } from '@/lib/crypto/encryption';
 import { validateStorageInput } from '@/lib/validation/schemas';
 import { StorageManager } from '@/lib/storage/storage-manager';
@@ -16,9 +22,16 @@ export async function GET(request) {
   const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
 
   try {
+    // 1. Auto-discover any new files in cloud bucket (such as media/ or test files)
+    try {
+      await StorageManager.syncStorageMedia(authData.user.id, token);
+    } catch (syncErr) {
+      console.warn('[Storage GET sync notice]:', syncErr.message);
+    }
+
     let connections = await listUserStorageConnections(authData.user.id, token);
 
-    // Sync cloud storage and refresh real-time usage from providers
+    // 2. Refresh live real-time usage from cloud providers
     if (connections && connections.length > 0) {
       for (const conn of connections) {
         try {
@@ -37,7 +50,7 @@ export async function GET(request) {
       connections = await listUserStorageConnections(authData.user.id, token);
     }
 
-    const combined = await getCombinedStorageMetrics(authData.user.id);
+    const combined = await getCombinedStorageMetrics(authData.user.id, token);
 
     return NextResponse.json({
       connections,
