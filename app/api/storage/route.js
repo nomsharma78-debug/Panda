@@ -18,12 +18,23 @@ export async function GET(request) {
   try {
     let connections = await listUserStorageConnections(authData.user.id, token);
 
-    // If user has connections but total storage shows 0 or uncounted, sync bucket in background
-    if (connections && connections.length > 0 && connections.some((c) => Number(c.used_bytes) === 0)) {
-      try {
-        await StorageManager.syncStorageMedia(authData.user.id, token);
-        connections = await listUserStorageConnections(authData.user.id, token);
-      } catch {}
+    // Sync cloud storage and refresh real-time usage from providers
+    if (connections && connections.length > 0) {
+      for (const conn of connections) {
+        try {
+          const storageRecord = await getStorageConnectionInternal(conn.id, authData.user.id, token);
+          if (storageRecord) {
+            const provider = StorageManager.getProviderFromRecord(storageRecord);
+            const usage = await provider.getUsage();
+            if (usage && typeof usage.usedBytes === 'number') {
+              await updateStorageUsage(authData.user.id, conn.id, usage);
+            }
+          }
+        } catch (e) {
+          console.warn('[Storage GET usage check]:', e.message);
+        }
+      }
+      connections = await listUserStorageConnections(authData.user.id, token);
     }
 
     const combined = await getCombinedStorageMetrics(authData.user.id);
