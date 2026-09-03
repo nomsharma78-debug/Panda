@@ -77,23 +77,22 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
 
   // Check storage from cache or network
   const checkStorage = useCallback(async (force = false) => {
-    // Use pandaCache shared with StorageManager
     const cached = pandaCache.get('storage:connections');
     if (!force && cached) {
-      const connected = (cached.connections || []).length > 0;
-      setHasStorage(connected);
+      setHasStorage((cached.connections || []).length > 0);
       return;
     }
     try {
-      const res = await fetch('/api/storage', { headers: getHeaders(), credentials: 'include' });
-      if (!mountedRef.current) return;
+      const headers = { 'Cache-Control': 'no-cache' };
+      if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+      const res = await fetch('/api/storage', { headers, credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         pandaCache.set('storage:connections', data, 60_000);
         setHasStorage((data.connections || []).length > 0);
       }
     } catch {}
-  }, [getHeaders]);
+  }, [session?.access_token]);
 
   const handleNavigateFolder = useCallback((folder) => {
     setCurrentFolder(folder);
@@ -104,7 +103,6 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       setMediaList(cached.items || []);
       setLoading(false);
     } else {
-      // Clear view immediately so old folder items don't linger for seconds!
       setFolders([]);
       setMediaList([]);
       setLoading(true);
@@ -115,74 +113,54 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   const fetchContent = useCallback(async (opts = {}) => {
     const { folder = currentFolder, filter = activeFilter, search = searchQuery } = opts;
 
-    // Cancel any in-flight request
-    if (abortRef.current) abortRef.current.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const signal = controller.signal;
-
     try {
       const params = new URLSearchParams();
       if (filter !== 'all') params.set('type', filter);
       if (search) params.set('search', search);
       if (folder) params.set('folderId', folder.id);
+      if (session?.access_token) params.set('token', session.access_token);
 
       const foldersUrl = `/api/media/folders${folder ? `?parentId=${folder.id}` : ''}`;
       const mediaUrl = `/api/media?${params.toString()}`;
-      const headers = getHeaders();
+      const headers = { 'Cache-Control': 'no-cache' };
+      if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
 
       const [foldersRes, mediaRes] = await Promise.all([
-        fetch(foldersUrl, { headers, credentials: 'include', signal }),
-        fetch(mediaUrl, { headers, credentials: 'include', signal }),
+        fetch(foldersUrl, { headers, credentials: 'include' }),
+        fetch(mediaUrl, { headers, credentials: 'include' }),
       ]);
-
-      if (!mountedRef.current || signal.aborted) return;
 
       let newFolders = [];
       let newItems = [];
 
       if (foldersRes.ok) {
         const data = await foldersRes.json();
-        if (!signal.aborted) {
-          newFolders = data.folders || [];
-          setFolders(newFolders);
-        }
+        newFolders = data.folders || [];
+        setFolders(newFolders);
       }
 
       if (mediaRes.ok) {
         const data = await mediaRes.json();
-        if (!signal.aborted) {
-          newItems = data.items || [];
-          setMediaList(newItems);
+        newItems = data.items || [];
+        setMediaList(newItems);
+        if (filter === 'all' && !search) {
+          const key = folder ? `media:folder:${folder.id}` : 'media:root';
+          pandaCache.set(key, { items: newItems, folders: newFolders }, 45_000);
         }
       }
-
-      // Cache folder view for instant display next visit
-      if (filter === 'all' && !search) {
-        const key = folder ? `media:folder:${folder.id}` : 'media:root';
-        pandaCache.set(key, { items: newItems, folders: newFolders }, 45_000);
-      }
     } catch (err) {
-      if (err.name !== 'AbortError') {
-        console.error('Fetch content error:', err);
-      }
+      console.error('[MediaGallery] Fetch content error:', err);
     } finally {
-      if (!signal.aborted && mountedRef.current) {
-        firstLoadDoneRef.current = true;
-        setLoading(false);
-      }
+      firstLoadDoneRef.current = true;
+      setLoading(false);
     }
-  }, [currentFolder, activeFilter, searchQuery, getHeaders]);
+  }, [currentFolder, activeFilter, searchQuery, session?.access_token]);
 
   // Load content on mount and whenever auth token, folder, filter, or search changes
   useEffect(() => {
-    mountedRef.current = true;
     checkStorage(false);
     fetchContent({});
-    return () => {
-      if (abortRef.current) abortRef.current.abort();
-    };
-  }, [session?.access_token, currentFolder, activeFilter, searchQuery, checkStorage, fetchContent]);
+  }, [session?.access_token, currentFolder, activeFilter, searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Listen to global upload/storage events
   useEffect(() => {
