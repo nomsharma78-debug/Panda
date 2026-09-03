@@ -12,10 +12,11 @@ export async function GET(request, { params }) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
   const { id } = await params;
 
   // Strict ownership check
-  const connection = await getSafeStorageConnection(id, authData.user.id);
+  const connection = await getSafeStorageConnection(id, authData.user.id, token);
   if (!connection) {
     return NextResponse.json({ error: 'Storage connection not found' }, { status: 404 });
   }
