@@ -25,9 +25,14 @@ export function MediaCard({
 }) {
   const { session, loading: authLoading } = useAuth();
   const targetMedia = media || item || {};
-  const isPhoto = targetMedia.media_type === 'photo';
-  const isVideo = targetMedia.media_type === 'video';
-  const isPdf = targetMedia.media_type === 'pdf';
+  const isPhoto =
+    targetMedia.media_type === 'photo' ||
+    targetMedia.media_type === 'image' ||
+    targetMedia.mime_type?.startsWith('image/') ||
+    Boolean(targetMedia.original_filename?.match(/\.(jpg|jpeg|png|webp|gif|svg|bmp|heic|avif)$/i)) ||
+    Boolean(targetMedia.object_key?.endsWith('.enc'));
+  const isVideo = targetMedia.media_type === 'video' || targetMedia.mime_type?.startsWith('video/');
+  const isPdf = targetMedia.media_type === 'pdf' || targetMedia.mime_type === 'application/pdf';
 
   // Read from in-memory blob cache immediately
   const cachedUrl = isPhoto && targetMedia.id ? mediaBlobCache.get(targetMedia.id) : null;
