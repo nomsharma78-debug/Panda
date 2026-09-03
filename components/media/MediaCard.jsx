@@ -40,8 +40,8 @@ export function MediaCard({
   const accessUrl = targetMedia.url || (targetMedia.id ? `/api/media/${targetMedia.id}/access${tokenParam}` : '');
   const downloadUrl = targetMedia.downloadUrl || (targetMedia.id ? `/api/media/${targetMedia.id}/download${tokenParam}` : '');
 
-  const [blobUrl, setBlobUrl] = useState(cachedUrl || accessUrl);
-  const [imgLoading, setImgLoading] = useState(!cachedUrl && !accessUrl && isPhoto);
+  const [blobUrl, setBlobUrl] = useState(cachedUrl);
+  const [imgLoading, setImgLoading] = useState(!cachedUrl && isPhoto);
   const [imgError, setImgError] = useState(null);
   const retryCountRef = useRef(0);
 
@@ -62,7 +62,11 @@ export function MediaCard({
     }
 
     let cancelled = false;
-    const mediaUrl = targetMedia.url || `/api/media/${targetMedia.id}/access${tokenParam}`;
+    setImgLoading(true);
+    setImgError(null);
+
+    const tokenQuery = session?.access_token ? `?token=${encodeURIComponent(session.access_token)}` : '';
+    const mediaUrl = `/api/media/${targetMedia.id}/access${tokenQuery}`;
     const fetchHeaders = {};
     if (session?.access_token) {
       fetchHeaders['Authorization'] = `Bearer ${session.access_token}`;
@@ -72,7 +76,7 @@ export function MediaCard({
       .then(async (res) => {
         if (!res.ok) {
           const errText = await res.text().catch(() => '');
-          throw new Error(`${res.status} ${errText.slice(0, 60)}`);
+          throw new Error(`${res.status} ${errText.slice(0, 50)}`);
         }
         return res.blob();
       })
@@ -88,12 +92,15 @@ export function MediaCard({
       })
       .catch((err) => {
         if (!cancelled) {
-          // If fetch failed, still allow direct accessUrl on img tag before showing error
-          if (accessUrl) {
-            setBlobUrl(accessUrl);
-            setImgLoading(false);
+          // Auto-retry up to 2 times with delay
+          if (retryCountRef.current < 2) {
+            retryCountRef.current++;
+            setTimeout(() => {
+              if (!cancelled) loadImage();
+            }, 1000);
           } else {
-            setImgError(err.message);
+            console.warn('[MediaCard] Image load failed after retries:', targetMedia.id, err.message);
+            setImgError(err.message || 'Failed to load');
             setImgLoading(false);
           }
         }
@@ -102,12 +109,12 @@ export function MediaCard({
     return () => {
       cancelled = true;
     };
-  }, [isPhoto, targetMedia.id, targetMedia.url, tokenParam, session?.access_token, accessUrl]);
+  }, [isPhoto, targetMedia.id, session?.access_token]);
 
   useEffect(() => {
     const cleanup = loadImage();
     return cleanup;
-  }, [loadImage]);
+  }, [loadImage, session?.access_token]);
 
   const timeStr = targetMedia.uploaded_at
     ? new Date(targetMedia.uploaded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -125,9 +132,15 @@ export function MediaCard({
       {/* Media Thumbnail Container */}
       <div className="relative aspect-square w-full bg-slate-950 flex items-center justify-center overflow-hidden">
         {isPhoto ? (
-          imgLoading ? (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="w-8 h-8 rounded-full border-2 border-teal-500/40 border-t-teal-500 animate-spin" />
+          blobUrl ? (
+            <img
+              src={blobUrl}
+              alt={targetMedia.original_filename || 'Photo'}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
+          ) : imgLoading ? (
+            <div className="w-full h-full flex items-center justify-center bg-slate-950">
+              <div className="w-6 h-6 rounded-full border-2 border-teal-500/30 border-t-teal-400 animate-spin" />
             </div>
           ) : imgError ? (
             <div
@@ -142,19 +155,9 @@ export function MediaCard({
               <span className="text-[9px] text-teal-400 font-semibold">Tap to retry</span>
             </div>
           ) : (
-            <img
-              src={blobUrl || accessUrl}
-              alt={targetMedia.original_filename || 'Photo'}
-              loading="lazy"
-              onError={() => {
-                if (!imgError) setImgError('Failed to load image');
-              }}
-              onLoad={() => {
-                setImgLoading(false);
-                setImgError(null);
-              }}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            />
+            <div className="w-full h-full flex items-center justify-center bg-slate-950">
+              <div className="w-6 h-6 rounded-full border-2 border-teal-500/30 border-t-teal-400 animate-spin" />
+            </div>
           )
         ) : isVideo ? (
           <div className="relative w-full h-full flex items-center justify-center bg-slate-900/90 group-hover:bg-slate-900 transition-colors">
