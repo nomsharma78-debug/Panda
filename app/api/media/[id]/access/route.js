@@ -5,6 +5,7 @@ import { StorageManager } from '@/lib/storage/storage-manager';
 export async function GET(request, { params }) {
   const authData = await getAuthenticatedUser(request);
   if (!authData) {
+    console.error('[media/access] Auth failed - no authData returned. URL:', request.url?.split('?')[0]);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -24,7 +25,7 @@ export async function GET(request, { params }) {
       },
     });
   } catch (err) {
-    console.error('Media access error:', err.message);
+    console.error('[media/access] getMediaBinary error:', err.message, '| userId:', authData.user.id, '| mediaId:', id);
     return NextResponse.json({ error: 'Media file not found or unauthorized' }, { status: 404 });
   }
 }

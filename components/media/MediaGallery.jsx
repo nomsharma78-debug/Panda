@@ -60,63 +60,99 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   const [deleteFolderTarget, setDeleteFolderTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const initialLoadedRef = React.useRef(false);
+  const abortRef = React.useRef(null);
+  const mountedRef = React.useRef(true);
+  const storageCheckedRef = React.useRef(false);
 
-  const fetchMediaAndFolders = useCallback(async (isSilent = false) => {
+  // Auth headers helper
+  const getHeaders = useCallback(() => {
+    const h = {};
+    if (session?.access_token) h['Authorization'] = `Bearer ${session.access_token}`;
+    return h;
+  }, [session?.access_token]);
+
+  // Check storage ONCE on mount (and after storage events), not on every folder change
+  const checkStorage = useCallback(async () => {
     try {
-      if (!isSilent && !initialLoadedRef.current) {
-        setLoading(true);
+      const res = await fetch('/api/storage', { headers: getHeaders(), credentials: 'include' });
+      if (!mountedRef.current) return;
+      if (res.ok) {
+        const data = await res.json();
+        const connected = (data.connections || []).length > 0;
+        setHasStorage(connected);
+        storageCheckedRef.current = true;
       }
+    } catch {}
+  }, [getHeaders]);
+
+  // Fast fetch: only media + folders (not storage) — runs on every folder/filter/search change
+  const fetchContent = useCallback(async (opts = {}) => {
+    const { silent = false, folder = currentFolder, filter = activeFilter, search = searchQuery } = opts;
+
+    // Cancel any in-flight request
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const signal = controller.signal;
+
+    try {
+      if (!silent) setLoading(true);
 
       const params = new URLSearchParams();
-      if (activeFilter !== 'all') params.set('type', activeFilter);
-      if (searchQuery) params.set('search', searchQuery);
-      if (currentFolder) {
-        params.set('folderId', currentFolder.id);
-      }
+      if (filter !== 'all') params.set('type', filter);
+      if (search) params.set('search', search);
+      if (folder) params.set('folderId', folder.id);
 
-      const foldersUrl = `/api/media/folders${currentFolder ? `?parentId=${currentFolder.id}` : ''}`;
+      const foldersUrl = `/api/media/folders${folder ? `?parentId=${folder.id}` : ''}`;
       const mediaUrl = `/api/media?${params.toString()}`;
+      const headers = getHeaders();
 
-      const headers = {};
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
-      }
-
-      // Parallel execution for maximum speed (<100ms)
-      const [storageRes, foldersRes, mediaRes] = await Promise.allSettled([
-        fetch('/api/storage', { headers }),
-        fetch(foldersUrl, { headers }),
-        fetch(mediaUrl, { headers }),
+      const [foldersRes, mediaRes] = await Promise.all([
+        fetch(foldersUrl, { headers, credentials: 'include', signal }),
+        fetch(mediaUrl, { headers, credentials: 'include', signal }),
       ]);
 
-      let storageConnected = false;
-      if (storageRes.status === 'fulfilled' && storageRes.value.ok) {
-        const storageData = await storageRes.value.json();
-        storageConnected = (storageData.connections || []).length > 0;
-        setHasStorage(storageConnected);
+      if (!mountedRef.current || signal.aborted) return;
+
+      if (foldersRes.ok) {
+        const data = await foldersRes.json();
+        if (!signal.aborted) setFolders(data.folders || []);
       }
 
-      if (foldersRes.status === 'fulfilled' && foldersRes.value.ok) {
-        const foldersData = await foldersRes.value.json();
-        setFolders(foldersData.folders || []);
-      }
-
-      if (mediaRes.status === 'fulfilled' && mediaRes.value.ok) {
-        const mediaData = await mediaRes.value.json();
-        setMediaList(mediaData.items || []);
+      if (mediaRes.ok) {
+        const data = await mediaRes.json();
+        if (!signal.aborted) setMediaList(data.items || []);
       }
     } catch (err) {
-      console.error('Fetch media error:', err);
+      if (err.name !== 'AbortError') {
+        console.error('Fetch content error:', err);
+      }
     } finally {
-      initialLoadedRef.current = true;
-      setLoading(false);
+      if (!signal.aborted && mountedRef.current) {
+        setLoading(false);
+      }
     }
-  }, [activeFilter, searchQuery, currentFolder, session?.access_token]);
+  }, [currentFolder, activeFilter, searchQuery, getHeaders]);
 
+  // On mount: check storage + load content in parallel
   useEffect(() => {
-    fetchMediaAndFolders(initialLoadedRef.current);
-  }, [fetchMediaAndFolders]);
+    mountedRef.current = true;
+    checkStorage();
+    fetchContent({ silent: false });
+    return () => {
+      mountedRef.current = false;
+      if (abortRef.current) abortRef.current.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Re-fetch content when folder/filter/search changes (NOT storage check)
+  useEffect(() => {
+    // Skip the very first render (handled by mount effect above)
+    if (!storageCheckedRef.current && !mountedRef.current) return;
+    fetchContent({ silent: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentFolder, activeFilter, searchQuery]);
 
   // Listen to global upload/storage events
   useEffect(() => {
@@ -128,10 +164,13 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
           return [...toAdd, ...prev];
         });
       }
-      fetchMediaAndFolders(true);
+      fetchContent({ silent: true });
     };
 
-    const handleStorageUpdated = () => fetchMediaAndFolders(true);
+    const handleStorageUpdated = () => {
+      checkStorage();
+      fetchContent({ silent: true });
+    };
 
     window.addEventListener('panda:media:uploaded', handleMediaUploaded);
     window.addEventListener('panda:storage:updated', handleStorageUpdated);
@@ -139,7 +178,10 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       window.removeEventListener('panda:media:uploaded', handleMediaUploaded);
       window.removeEventListener('panda:storage:updated', handleStorageUpdated);
     };
-  }, [fetchMediaAndFolders]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+
 
   // Date grouping utility
   const groupedMedia = useMemo(() => {
@@ -211,23 +253,27 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     try {
       if (deleteTarget === 'bulk') {
         const ids = Array.from(selectedIds);
+        // Optimistically remove from UI immediately
+        setMediaList((prev) => prev.filter((m) => !ids.includes(m.id)));
         for (const id of ids) {
-          await fetch(`/api/media/${id}`, { method: 'DELETE' });
+          await fetch(`/api/media/${id}`, { method: 'DELETE', headers: getHeaders(), credentials: 'include' });
         }
         success(`Deleted ${ids.length} files successfully.`);
         setSelectedIds(new Set());
         setIsSelectionMode(false);
       } else if (deleteTarget?.id) {
-        const res = await fetch(`/api/media/${deleteTarget.id}`, { method: 'DELETE' });
+        // Optimistically remove from UI immediately
+        setMediaList((prev) => prev.filter((m) => m.id !== deleteTarget.id));
+        const res = await fetch(`/api/media/${deleteTarget.id}`, { method: 'DELETE', headers: getHeaders(), credentials: 'include' });
         if (res.ok) {
           success(`Deleted "${deleteTarget.original_filename}"`);
         } else {
           toastError('Failed to delete file');
+          fetchContent({ silent: true }); // Restore list on failure
         }
       }
       setDeleteTarget(null);
-      fetchMediaAndFolders();
-      window.dispatchEvent(new CustomEvent('panda:media:uploaded'));
+      fetchContent({ silent: true });
     } catch {
       toastError('Network error deleting files');
     } finally {
@@ -238,16 +284,19 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   const executeDeleteFolder = async () => {
     if (!deleteFolderTarget) return;
     setIsDeleting(true);
+    // Optimistically remove folder from list
+    setFolders((prev) => prev.filter((f) => f.id !== deleteFolderTarget.id));
     try {
-      const res = await fetch(`/api/media/folders?id=${deleteFolderTarget.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/media/folders?id=${deleteFolderTarget.id}`, { method: 'DELETE', headers: getHeaders(), credentials: 'include' });
       if (res.ok) {
         success(`Folder "${deleteFolderTarget.name}" deleted.`);
         if (currentFolder?.id === deleteFolderTarget.id) {
           setCurrentFolder(null);
         }
-        fetchMediaAndFolders();
+        fetchContent({ silent: true });
       } else {
         toastError('Failed to delete folder');
+        fetchContent({ silent: true }); // Restore on failure
       }
     } catch {
       toastError('Network error deleting folder');
@@ -563,7 +612,11 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         isOpen={createFolderOpen}
         onClose={() => setCreateFolderOpen(false)}
         parentId={currentFolder?.id || null}
-        onFolderCreated={() => fetchMediaAndFolders()}
+        onFolderCreated={(newFolder) => {
+          // Optimistically add folder immediately
+          if (newFolder) setFolders((prev) => [newFolder, ...prev]);
+          fetchContent({ silent: true });
+        }}
       />
 
       {/* LIGHTBOX FOR PHOTO / VIDEO / PDF PREVIEW */}
