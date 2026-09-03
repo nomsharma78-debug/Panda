@@ -17,7 +17,7 @@ export async function GET(request) {
 
   try {
     const connections = await listUserStorageConnections(authData.user.id, token);
-    const combined = await getCombinedStorageMetrics(authData.user.id, token);
+    const combined = await getCombinedStorageMetrics(authData.user.id);
 
     return NextResponse.json({
       connections,
@@ -34,8 +34,6 @@ export async function POST(request) {
   if (!authData) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-
-  const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
 
   try {
     const body = await request.json();
@@ -70,6 +68,7 @@ export async function POST(request) {
 
     const encryptedConfig = encryptData(configToEncrypt);
 
+    const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
     const isDefault = body.isDefault || false;
     const connection = await createStorageConnection(authData.user.id, {
       token,
