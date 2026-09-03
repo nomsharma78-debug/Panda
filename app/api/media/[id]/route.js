@@ -12,9 +12,10 @@ export async function GET(request, { params }) {
   }
 
   const { id } = await params;
+  const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
 
   // Strict ownership check
-  const media = await getMediaFileById(id, authData.user.id);
+  const media = await getMediaFileById(id, authData.user.id, token);
   if (!media) {
     return NextResponse.json({ error: 'Media file not found' }, { status: 404 });
   }
@@ -29,9 +30,10 @@ export async function DELETE(request, { params }) {
   }
 
   const { id } = await params;
+  const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
 
   try {
-    const result = await StorageManager.deleteMedia(authData.user.id, id);
+    const result = await StorageManager.deleteMedia(authData.user.id, id, token);
     if (!result.success) {
       return NextResponse.json({ error: result.error || 'Media file not found' }, { status: 404 });
     }
