@@ -31,8 +31,9 @@ export async function GET(request) {
       offset,
     });
 
-    // Auto-discover any files present in connected cloud storage if list is empty
-    if (items.length === 0 && !search && mediaType === 'all') {
+    // Auto-discover any files present in connected cloud storage if requested or if empty
+    const shouldSync = searchParams.get('sync') === 'true' || (items.length === 0 && !search && mediaType === 'all');
+    if (shouldSync) {
       try {
         const synced = await StorageManager.syncStorageMedia(authData.user.id, token);
         if (synced && synced.length > 0) {

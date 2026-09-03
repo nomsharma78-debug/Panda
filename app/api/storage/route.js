@@ -16,7 +16,16 @@ export async function GET(request) {
   const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
 
   try {
-    const connections = await listUserStorageConnections(authData.user.id, token);
+    let connections = await listUserStorageConnections(authData.user.id, token);
+
+    // If user has connections but total storage shows 0 or uncounted, sync bucket in background
+    if (connections && connections.length > 0 && connections.some((c) => Number(c.used_bytes) === 0)) {
+      try {
+        await StorageManager.syncStorageMedia(authData.user.id, token);
+        connections = await listUserStorageConnections(authData.user.id, token);
+      } catch {}
+    }
+
     const combined = await getCombinedStorageMetrics(authData.user.id);
 
     return NextResponse.json({
@@ -78,6 +87,11 @@ export async function POST(request) {
       isDefault,
     });
 
+    // Auto-discover and sync existing files in this bucket immediately
+    try {
+      await StorageManager.syncStorageMedia(authData.user.id, token);
+    } catch {}
+
     const ip = getClientIp(request);
     await logAuditEvent({
       userId: authData.user.id,
@@ -94,7 +108,7 @@ export async function POST(request) {
     return NextResponse.json(
       {
         connection,
-        message: 'Storage connection tested and connected successfully.',
+        message: 'Storage connection tested, connected, and synchronized successfully.',
       },
       { status: 201 }
     );
