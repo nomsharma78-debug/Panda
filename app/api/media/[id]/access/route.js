@@ -27,10 +27,20 @@ export async function GET(request, { params }) {
     });
   } catch (err) {
     console.error('[media/access] getMediaBinary error:', err.message, '| userId:', authData.user.id, '| mediaId:', id);
-    const isNotFound = err.message.includes('not found') || err.message.includes('unauthorized');
+    
+    let status = 500;
+    const msg = err.message || '';
+    if (msg.includes('unauthorized') || msg.includes('Forbidden') || msg.includes('FORBIDDEN')) {
+      status = 403;
+    } else if (msg.includes('not found') || msg.includes('NoSuchKey') || msg.includes('NotFound')) {
+      status = 404;
+    } else if (msg.includes('storage') || msg.includes('timeout') || msg.includes('ECONNREFUSED') || msg.includes('Provider')) {
+      status = 502;
+    }
+
     return NextResponse.json(
-      { error: err.message || 'Media file not found or unauthorized' },
-      { status: isNotFound ? 404 : 500 }
+      { error: err.message || 'Media file could not be loaded', code: status === 404 ? 'FILE_NOT_FOUND' : status === 403 ? 'FORBIDDEN' : 'STORAGE_ERROR' },
+      { status }
     );
   }
 }

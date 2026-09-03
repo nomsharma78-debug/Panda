@@ -20,7 +20,24 @@ export async function GET(request, { params }) {
     return NextResponse.json({ error: 'Media file not found' }, { status: 404 });
   }
 
-  return NextResponse.json({ media });
+  const normalized = {
+    id: media.id,
+    filename: media.original_filename,
+    originalFilename: media.original_filename,
+    mimeType: media.mime_type,
+    fileSize: media.file_size,
+    sizeBytes: media.file_size,
+    url: `/api/media/${media.id}/access`,
+    previewUrl: `/api/media/${media.id}/access`,
+    downloadUrl: `/api/media/${media.id}/download`,
+    encrypted: Boolean(media.encrypted),
+    storageProvider: media.storage_provider || 's3',
+    uploadedAt: media.uploaded_at,
+    createdAt: media.created_at,
+    updatedAt: media.updated_at,
+  };
+
+  return NextResponse.json({ success: true, media: normalized, ...normalized });
 }
 
 export async function DELETE(request, { params }) {
