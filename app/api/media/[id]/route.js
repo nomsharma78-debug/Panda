@@ -70,3 +70,41 @@ export async function DELETE(request, { params }) {
     return NextResponse.json({ error: 'Failed to delete media file' }, { status: 500 });
   }
 }
+
+export async function PATCH(request, { params }) {
+  const authData = await getAuthenticatedUser(request);
+  if (!authData) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
+
+  try {
+    const body = await request.json();
+    const { filename, folderId } = body;
+
+    let updated = null;
+    if (filename) {
+      const { renameMediaFile } = await import('@/lib/db/media');
+      updated = await renameMediaFile(id, authData.user.id, filename, token);
+    }
+    if (folderId !== undefined) {
+      const { moveMediaFile } = await import('@/lib/db/media');
+      await moveMediaFile(id, authData.user.id, folderId);
+      if (!updated) {
+        const { getMediaFileById } = await import('@/lib/db/media');
+        updated = await getMediaFileById(id, authData.user.id, token);
+      }
+    }
+
+    if (!updated) {
+      return NextResponse.json({ error: 'Failed to update media file' }, { status: 400 });
+    }
+
+    return NextResponse.json({ success: true, media: updated });
+  } catch (err) {
+    console.error('Update media error:', err);
+    return NextResponse.json({ error: err.message || 'Failed to update media file' }, { status: 500 });
+  }
+}
