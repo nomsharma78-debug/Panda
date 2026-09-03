@@ -13,6 +13,8 @@ export async function GET(request) {
   const mediaType = searchParams.get('type') || 'all';
   const search = searchParams.get('search') || '';
   const folderIdParam = searchParams.get('folderId');
+  const limit = parseInt(searchParams.get('limit') || '500', 10);
+  const offset = parseInt(searchParams.get('offset') || '0', 10);
   let folderId = undefined;
   if (folderIdParam === 'root') folderId = null;
   else if (folderIdParam) folderId = folderIdParam;
