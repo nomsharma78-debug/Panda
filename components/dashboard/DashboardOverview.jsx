@@ -25,6 +25,10 @@ import { Progress, formatBytes } from '@/components/ui/Progress';
 import { Badge } from '@/components/ui/Badge';
 import { MediaLightbox } from '@/components/media/MediaLightbox';
 import { useAuth } from '@/components/context/AuthContext';
+import { pandaCache } from '@/lib/client-cache';
+
+const CACHE_KEY = 'dashboard:overview';
+const CACHE_TTL = 30_000; // 30 seconds
 
 export function DashboardOverview({
   onOpenUpload,
@@ -32,24 +36,28 @@ export function DashboardOverview({
   onOpenAddStorage,
 }) {
   const { user, session } = useAuth();
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+
+  // Load from cache immediately — no spinner on revisit
+  const cached = pandaCache.get(CACHE_KEY);
+  const [data, setData] = useState(cached || null);
+  const [loading, setLoading] = useState(!cached);
 
   // Lightbox state for recent media
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
-  const fetchDashboardData = useCallback(async () => {
+  const fetchDashboardData = useCallback(async (force = false) => {
+    if (!force && pandaCache.get(CACHE_KEY)) return;
+
     try {
-      setLoading(true);
       const headers = {};
       if (session?.access_token) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
       const [dashRes, vaultRes] = await Promise.allSettled([
-        fetch('/api/dashboard', { headers }),
-        fetch('/api/vault', { headers }),
+        fetch('/api/dashboard', { headers, credentials: 'include' }),
+        fetch('/api/vault', { headers, credentials: 'include' }),
       ]);
 
       let dashboardData = {};
@@ -70,23 +78,31 @@ export function DashboardOverview({
         dashboardData.vault = vaultStats;
       }
 
+      pandaCache.set(CACHE_KEY, dashboardData, CACHE_TTL);
       setData(dashboardData);
     } catch (e) {
       console.error('Failed to load dashboard data:', e);
     } finally {
       setLoading(false);
     }
-  }, [session]);
+  }, [session?.access_token]);
 
   useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
+    fetchDashboardData(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
-    const handleVaultUpdated = () => fetchDashboardData();
+    const handleVaultUpdated = () => {
+      pandaCache.invalidate(CACHE_KEY);
+      fetchDashboardData(true);
+    };
     window.addEventListener('panda:vault:updated', handleVaultUpdated);
     return () => window.removeEventListener('panda:vault:updated', handleVaultUpdated);
-  }, [fetchDashboardData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+
 
   const getGreeting = () => {
     const hour = new Date().getHours();

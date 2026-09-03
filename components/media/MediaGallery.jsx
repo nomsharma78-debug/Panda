@@ -36,16 +36,20 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { StorageHowItWorksModal } from '@/components/storage/StorageHowItWorksModal';
 import { useToast } from '@/components/context/ToastContext';
 import { useAuth } from '@/components/context/AuthContext';
+import { pandaCache } from '@/lib/client-cache';
 
 export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   const { session } = useAuth();
   const { success, error: toastError } = useToast();
 
-  const [mediaList, setMediaList] = useState([]);
-  const [folders, setFolders] = useState([]);
+  // Restore from cache on mount for instant display
+  const cachedRoot = pandaCache.get('media:root');
+  const [mediaList, setMediaList] = useState(cachedRoot?.items || []);
+  const [folders, setFolders] = useState(cachedRoot?.folders || []);
   const [currentFolder, setCurrentFolder] = useState(null); // null = Root
-  const [hasStorage, setHasStorage] = useState(true);
-  const [loading, setLoading] = useState(true);
+  const [hasStorage, setHasStorage] = useState(pandaCache.get('storage:connections') ? (pandaCache.get('storage:connections')?.connections || []).length > 0 : true);
+  // Only show skeleton on very first load (no cache at all)
+  const [loading, setLoading] = useState(!cachedRoot);
   const [activeFilter, setActiveFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -62,7 +66,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
 
   const abortRef = React.useRef(null);
   const mountedRef = React.useRef(true);
-  const storageCheckedRef = React.useRef(false);
+  const firstLoadDoneRef = React.useRef(!!cachedRoot); // skip full skeleton if cached
 
   // Auth headers helper
   const getHeaders = useCallback(() => {
@@ -71,23 +75,29 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     return h;
   }, [session?.access_token]);
 
-  // Check storage ONCE on mount (and after storage events), not on every folder change
-  const checkStorage = useCallback(async () => {
+  // Check storage from cache or network
+  const checkStorage = useCallback(async (force = false) => {
+    // Use pandaCache shared with StorageManager
+    const cached = pandaCache.get('storage:connections');
+    if (!force && cached) {
+      const connected = (cached.connections || []).length > 0;
+      setHasStorage(connected);
+      return;
+    }
     try {
       const res = await fetch('/api/storage', { headers: getHeaders(), credentials: 'include' });
       if (!mountedRef.current) return;
       if (res.ok) {
         const data = await res.json();
-        const connected = (data.connections || []).length > 0;
-        setHasStorage(connected);
-        storageCheckedRef.current = true;
+        pandaCache.set('storage:connections', data, 60_000);
+        setHasStorage((data.connections || []).length > 0);
       }
     } catch {}
   }, [getHeaders]);
 
-  // Fast fetch: only media + folders (not storage) — runs on every folder/filter/search change
+  // Fast fetch: only media + folders — NEVER shows skeleton after first load
   const fetchContent = useCallback(async (opts = {}) => {
-    const { silent = false, folder = currentFolder, filter = activeFilter, search = searchQuery } = opts;
+    const { folder = currentFolder, filter = activeFilter, search = searchQuery } = opts;
 
     // Cancel any in-flight request
     if (abortRef.current) abortRef.current.abort();
@@ -95,9 +105,11 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     abortRef.current = controller;
     const signal = controller.signal;
 
-    try {
-      if (!silent) setLoading(true);
+    // Only show full skeleton on the very first load
+    const isFirstLoad = !firstLoadDoneRef.current;
+    if (isFirstLoad) setLoading(true);
 
+    try {
       const params = new URLSearchParams();
       if (filter !== 'all') params.set('type', filter);
       if (search) params.set('search', search);
@@ -114,14 +126,28 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
 
       if (!mountedRef.current || signal.aborted) return;
 
+      let newFolders = folders;
+      let newItems = mediaList;
+
       if (foldersRes.ok) {
         const data = await foldersRes.json();
-        if (!signal.aborted) setFolders(data.folders || []);
+        if (!signal.aborted) {
+          newFolders = data.folders || [];
+          setFolders(newFolders);
+        }
       }
 
       if (mediaRes.ok) {
         const data = await mediaRes.json();
-        if (!signal.aborted) setMediaList(data.items || []);
+        if (!signal.aborted) {
+          newItems = data.items || [];
+          setMediaList(newItems);
+        }
+      }
+
+      // Cache root view for instant display next visit
+      if (!folder && filter === 'all' && !search) {
+        pandaCache.set('media:root', { items: newItems, folders: newFolders }, 30_000);
       }
     } catch (err) {
       if (err.name !== 'AbortError') {
@@ -129,16 +155,17 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       }
     } finally {
       if (!signal.aborted && mountedRef.current) {
+        firstLoadDoneRef.current = true;
         setLoading(false);
       }
     }
-  }, [currentFolder, activeFilter, searchQuery, getHeaders]);
+  }, [currentFolder, activeFilter, searchQuery, getHeaders]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // On mount: check storage + load content in parallel
   useEffect(() => {
     mountedRef.current = true;
-    checkStorage();
-    fetchContent({ silent: false });
+    checkStorage(false);
+    fetchContent({});
     return () => {
       mountedRef.current = false;
       if (abortRef.current) abortRef.current.abort();
@@ -146,11 +173,10 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-fetch content when folder/filter/search changes (NOT storage check)
+  // Re-fetch when folder/filter/search changes — silent (no skeleton)
   useEffect(() => {
-    // Skip the very first render (handled by mount effect above)
-    if (!storageCheckedRef.current && !mountedRef.current) return;
-    fetchContent({ silent: false });
+    if (!firstLoadDoneRef.current) return; // handled by mount effect
+    fetchContent({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentFolder, activeFilter, searchQuery]);
 
@@ -164,12 +190,14 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
           return [...toAdd, ...prev];
         });
       }
-      fetchContent({ silent: true });
+      pandaCache.invalidate('media:root');
+      fetchContent({});
     };
 
     const handleStorageUpdated = () => {
-      checkStorage();
-      fetchContent({ silent: true });
+      pandaCache.invalidate('storage:connections');
+      checkStorage(true);
+      fetchContent({});
     };
 
     window.addEventListener('panda:media:uploaded', handleMediaUploaded);

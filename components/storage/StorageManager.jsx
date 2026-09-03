@@ -25,58 +25,70 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { DisconnectStorageModal } from './DisconnectStorageModal';
 import { useToast } from '@/components/context/ToastContext';
 import { useAuth } from '@/components/context/AuthContext';
+import { pandaCache } from '@/lib/client-cache';
+
+const CACHE_KEY = 'storage:connections';
+const CACHE_TTL = 60_000; // 60 seconds
 
 export function StorageManager({ onOpenAddModal }) {
   const { session } = useAuth();
   const { success, error: toastError, info } = useToast();
 
-  const [connections, setConnections] = useState([]);
-  const [combinedMetrics, setCombinedMetrics] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Initialise state from cache immediately — zero loading flash
+  const cached = pandaCache.get(CACHE_KEY);
+  const [connections, setConnections] = useState(cached?.connections || []);
+  const [combinedMetrics, setCombinedMetrics] = useState(cached?.combined || null);
+  const [loading, setLoading] = useState(!cached); // skip spinner if cached
   const [testingId, setTestingId] = useState(null);
   const [refreshingId, setRefreshingId] = useState(null);
   const [settingDefaultId, setSettingDefaultId] = useState(null);
   const [disconnectTarget, setDisconnectTarget] = useState(null);
 
-  const initialLoadedRef = React.useRef(false);
+  const fetchStorageData = useCallback(async (force = false) => {
+    // If we have a fresh cache and caller didn't force, skip the network call
+    if (!force && pandaCache.get(CACHE_KEY)) return;
 
-  const fetchStorageData = useCallback(async (isSilent = false) => {
+    const headers = { 'Cache-Control': 'no-cache' };
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
     try {
-      if (!isSilent && !initialLoadedRef.current) {
-        setLoading(true);
-      }
-      const headers = {};
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
-      }
-      const res = await fetch('/api/storage', { headers });
+      const res = await fetch('/api/storage', { headers, credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
+        pandaCache.set(CACHE_KEY, data, CACHE_TTL);
         setConnections(data.connections || []);
         setCombinedMetrics(data.combined || null);
       }
     } catch (err) {
       console.error('Fetch storage connections error:', err);
     } finally {
-      initialLoadedRef.current = true;
       setLoading(false);
     }
   }, [session?.access_token]);
 
   useEffect(() => {
-    fetchStorageData(initialLoadedRef.current);
-  }, [fetchStorageData]);
+    // Always do a background refresh on mount (silent if cached data shown)
+    fetchStorageData(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Listen to global updates
+  // Listen to global updates — invalidate cache and refetch
   useEffect(() => {
-    const handleUpdated = () => fetchStorageData();
+    const handleUpdated = () => {
+      pandaCache.invalidate(CACHE_KEY);
+      fetchStorageData(true);
+    };
     window.addEventListener('panda:storage:updated', handleUpdated);
     window.addEventListener('panda:media:uploaded', handleUpdated);
     return () => {
       window.removeEventListener('panda:storage:updated', handleUpdated);
       window.removeEventListener('panda:media:uploaded', handleUpdated);
     };
-  }, [fetchStorageData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+
 
   // Re-test existing storage connection live
   const handleTestStorage = async (conn) => {
