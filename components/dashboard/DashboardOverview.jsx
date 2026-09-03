@@ -93,14 +93,19 @@ export function DashboardOverview({
   }, []);
 
   useEffect(() => {
-    const handleVaultUpdated = () => {
+    const handleUpdated = () => {
       pandaCache.invalidate(CACHE_KEY);
       fetchDashboardData(true);
     };
-    window.addEventListener('panda:vault:updated', handleVaultUpdated);
-    return () => window.removeEventListener('panda:vault:updated', handleVaultUpdated);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    window.addEventListener('panda:vault:updated', handleUpdated);
+    window.addEventListener('panda:storage:updated', handleUpdated);
+    window.addEventListener('panda:media:uploaded', handleUpdated);
+    return () => {
+      window.removeEventListener('panda:vault:updated', handleUpdated);
+      window.removeEventListener('panda:storage:updated', handleUpdated);
+      window.removeEventListener('panda:media:uploaded', handleUpdated);
+    };
+  }, [fetchDashboardData]);
 
 
 

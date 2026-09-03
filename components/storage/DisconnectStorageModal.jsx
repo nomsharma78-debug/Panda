@@ -35,6 +35,7 @@ export function DisconnectStorageModal({
       const res = await fetch(`/api/storage/${storageItem.id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           handlingMode,
           targetStorageId: handlingMode === 'move' ? targetStorageId : null,

@@ -32,8 +32,11 @@ export default function DashboardPage() {
       <MediaUploadModal
         isOpen={uploadOpen}
         onClose={() => setUploadOpen(false)}
-        onUploadSuccess={() => {
-          window.location.reload();
+        onUploadSuccess={(newItems) => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('panda:media:uploaded', { detail: { newItems } }));
+            window.dispatchEvent(new CustomEvent('panda:storage:updated'));
+          }
         }}
       />
 
@@ -42,7 +45,9 @@ export default function DashboardPage() {
         onClose={() => setAddVaultOpen(false)}
         initialType={vaultType}
         onItemCreated={() => {
-          window.location.reload();
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('panda:vault:updated'));
+          }
         }}
       />
 
@@ -50,7 +55,9 @@ export default function DashboardPage() {
         isOpen={addStorageOpen}
         onClose={() => setAddStorageOpen(false)}
         onStorageAdded={() => {
-          window.location.reload();
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('panda:storage:updated'));
+          }
         }}
       />
     </AppLayout>

@@ -35,7 +35,7 @@ export function AppLayout({
       if (session?.access_token) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
-      const res = await fetch('/api/storage', { headers });
+      const res = await fetch('/api/storage', { headers, credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setStorageMetrics(data.combined);
@@ -51,11 +51,15 @@ export function AppLayout({
     }
   }, [user, loading, router]);
 
-  // Real-time listener for storage additions and deletions
+  // Real-time listener for storage additions, deletions, and media uploads
   useEffect(() => {
     const handleStorageUpdated = () => fetchStorageSummary();
     window.addEventListener('panda:storage:updated', handleStorageUpdated);
-    return () => window.removeEventListener('panda:storage:updated', handleStorageUpdated);
+    window.addEventListener('panda:media:uploaded', handleStorageUpdated);
+    return () => {
+      window.removeEventListener('panda:storage:updated', handleStorageUpdated);
+      window.removeEventListener('panda:media:uploaded', handleStorageUpdated);
+    };
   }, []);
 
   const handleOpenAddVaultItem = (type = 'login') => {

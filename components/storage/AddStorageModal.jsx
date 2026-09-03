@@ -140,6 +140,7 @@ export function AddStorageModal({ isOpen, onClose, onStorageAdded }) {
       const res = await fetch('/api/storage/test', {
         method: 'POST',
         headers,
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
 
@@ -198,6 +199,7 @@ export function AddStorageModal({ isOpen, onClose, onStorageAdded }) {
       const res = await fetch('/api/storage', {
         method: 'POST',
         headers,
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
 

@@ -210,6 +210,7 @@ export function AddVaultItemModal({
       const res = await fetch('/api/vault', {
         method: 'POST',
         headers,
+        credentials: 'include',
         body: JSON.stringify({
           type,
           encryptedPayload: encryptedPayloadString,

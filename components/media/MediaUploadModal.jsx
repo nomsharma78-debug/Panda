@@ -45,8 +45,8 @@ export function MediaUploadModal({
 
       // Parallel fetch with authorization
       Promise.allSettled([
-        fetch('/api/storage', { headers }).then((res) => res.json()),
-        fetch('/api/media/folders', { headers }).then((res) => res.json()),
+        fetch('/api/storage', { headers, credentials: 'include' }).then((res) => res.json()),
+        fetch('/api/media/folders', { headers, credentials: 'include' }).then((res) => res.json()),
       ])
         .then(([storageResult, foldersResult]) => {
           if (storageResult.status === 'fulfilled' && storageResult.value?.connections) {
@@ -119,6 +119,7 @@ export function MediaUploadModal({
         const res = await fetch('/api/media/upload', {
           method: 'POST',
           headers,
+          credentials: 'include',
           body: formData,
         });
 

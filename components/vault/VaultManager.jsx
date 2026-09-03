@@ -62,7 +62,7 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const res = await fetch(url, { headers });
+      const res = await fetch(url, { headers, credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         const rawItems = data.items || [];
@@ -126,6 +126,7 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
       const res = await fetch(`/api/vault/${deleteTarget.id}`, {
         method: 'DELETE',
         headers,
+        credentials: 'include',
       });
 
       if (res.ok) {

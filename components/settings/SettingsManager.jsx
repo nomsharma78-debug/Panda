@@ -107,7 +107,7 @@ export function SettingsManager({ initialTab = 'account' }) {
       if (session?.access_token) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
-      const res = await fetch('/api/settings/sessions', { headers });
+      const res = await fetch('/api/settings/sessions', { headers, credentials: 'include' });
       if (res.ok) {
         const d = await res.json();
         setSessions(d.sessions || []);
@@ -120,7 +120,7 @@ export function SettingsManager({ initialTab = 'account' }) {
 
   const fetchSchemaSql = async () => {
     try {
-      const res = await fetch('/api/database/schema?json=true');
+      const res = await fetch('/api/database/schema?json=true', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setVaultSchemaSql(data.vaultSql || '');
@@ -136,7 +136,7 @@ export function SettingsManager({ initialTab = 'account' }) {
       if (session?.access_token) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
-      const res = await fetch('/api/audit?limit=50', { headers });
+      const res = await fetch('/api/audit?limit=50', { headers, credentials: 'include' });
       if (res.ok) {
         const d = await res.json();
         setAuditLogs(d.logs || []);
@@ -167,6 +167,7 @@ export function SettingsManager({ initialTab = 'account' }) {
       const res = await fetch('/api/settings/password', {
         method: 'POST',
         headers,
+        credentials: 'include',
         body: JSON.stringify({ currentPassword, newPassword }),
       });
 
@@ -196,6 +197,7 @@ export function SettingsManager({ initialTab = 'account' }) {
       const res = await fetch(`/api/settings/sessions?id=${sessionId}`, {
         method: 'DELETE',
         headers,
+        credentials: 'include',
       });
       if (res.ok) {
         success('Device session revoked successfully');
@@ -220,6 +222,7 @@ export function SettingsManager({ initialTab = 'account' }) {
       const res = await fetch('/api/settings/sessions?all=true', {
         method: 'DELETE',
         headers,
+        credentials: 'include',
       });
       if (res.ok) {
         success('All other device sessions revoked');

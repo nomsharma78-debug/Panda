@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { getSupabaseBrowserClient, isSupabaseConfigured } from '@/lib/auth/supabase';
 import { deriveClientKey } from '@/lib/crypto/client-vault';
 
 const DEFAULT_INACTIVITY_MINUTES = 15;
@@ -52,8 +51,6 @@ export function AuthProvider({ children }) {
   const lastActivityRef = useRef(Date.now());
   const router = useRouter();
 
-  const isSupabaseActive = typeof window !== 'undefined' && isSupabaseConfigured();
-
   // Load saved inactivity timeout preference
   useEffect(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
@@ -79,77 +76,30 @@ export function AuthProvider({ children }) {
     }
     lastActivityRef.current = Date.now();
 
-    // Persist to database across all user devices
-    const headers = { 'Content-Type': 'application/json' };
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
-    }
+    // Persist to database via backend API
     fetch('/api/settings/inactivity', {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ minutes: mins }),
     }).catch(() => {});
   };
 
   /**
-   * Ultra-Fast Optimistic Auth Check
-   * Resolves in <50ms, then validates against live Supabase backend in background.
+   * Fast Reactive Auth Check: Frontend -> Backend API (/api/auth/me) -> Database
    */
   const checkAuth = useCallback(async () => {
     try {
-      const supabase = getSupabaseBrowserClient();
-
-      if (supabase) {
-        // 1. Fast cache read to render UI instantly (<10ms)
-        const { data: { session: fastSession } } = await supabase.auth.getSession();
-        if (fastSession?.user) {
-          const userName =
-            fastSession.user.user_metadata?.full_name ||
-            fastSession.user.user_metadata?.name ||
-            null;
-
-          setSession(fastSession);
-          setUser({
-            id: fastSession.user.id,
-            email: fastSession.user.email,
-            name: userName,
-            createdAt: fastSession.user.created_at,
-          });
-          setLoading(false);
-
-          // Fetch account inactivity preference from DB in background
-          fetch('/api/settings/inactivity', {
-            headers: { Authorization: `Bearer ${fastSession.access_token}` },
-          })
-            .then((r) => r.json())
-            .then((d) => {
-              if (d?.inactivityMinutes) {
-                setInactivityMinutesState(d.inactivityMinutes);
-                try {
-                  window.localStorage?.setItem(INACTIVITY_STORAGE_KEY, d.inactivityMinutes.toString());
-                } catch {}
-              }
-            })
-            .catch(() => {});
-
-          // 2. Background verification with live database server
-          fetch('/api/auth/heartbeat', {
-            headers: { Authorization: `Bearer ${fastSession.access_token}` },
-          }).catch(() => {});
-          return;
-        }
-      }
-
-      // 3. Fallback server cookie check
       const res = await fetch('/api/auth/me', {
         headers: { 'Cache-Control': 'no-cache' },
+        credentials: 'include',
       });
 
       if (res.ok) {
         const data = await res.json();
         if (data.authenticated && data.user) {
           setUser(data.user);
-          setSession({ user: data.user });
+          setSession(data.session || { id: data.user.id });
           if (data.user?.inactivity_timeout_minutes) {
             setInactivityMinutesState(data.user.inactivity_timeout_minutes);
           }
@@ -161,57 +111,22 @@ export function AuthProvider({ children }) {
         setUser(null);
         setSession(null);
       }
-    } catch (err) {
+    } catch {
       setUser(null);
       setSession(null);
     } finally {
       setLoading(false);
     }
-  }, [session?.access_token]);
+  }, []);
 
+  // Hydrate auth status reactively on mount with useEffect
   useEffect(() => {
     checkAuth();
-
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
-
-    let subscription = null;
-    try {
-      const { data } = supabase.auth.onAuthStateChange((event, currentSession) => {
-        if (event === 'SIGNED_OUT' || !currentSession?.user) {
-          purgeLocalAuthStorage();
-          setUser(null);
-          setSession(null);
-          setClientCryptoKey(null);
-          return;
-        }
-
-        if (currentSession?.user) {
-          const userName =
-            currentSession.user.user_metadata?.full_name ||
-            currentSession.user.user_metadata?.name ||
-            null;
-
-          setSession(currentSession);
-          setUser({
-            id: currentSession.user.id,
-            email: currentSession.user.email,
-            name: userName,
-            createdAt: currentSession.user.created_at,
-          });
-        }
-      });
-      subscription = data?.subscription;
-    } catch {}
-
-    return () => {
-      subscription?.unsubscribe?.();
-    };
   }, [checkAuth]);
 
   /**
-   * Live Session Presence & Immediate Revocation Watchdog
-   * Checks every 5s (and on window focus) if this device was revoked from another device.
+   * Live Session Presence & Revocation Watchdog
+   * Checks every 25s (and on window focus) if session is valid in DB
    */
   useEffect(() => {
     if (!user) return;
@@ -219,22 +134,18 @@ export function AuthProvider({ children }) {
     let lastCheckTime = 0;
     const checkRevocationStatus = async () => {
       const now = Date.now();
-      if (now - lastCheckTime < 25000) return; // Throttle to max once per 25s
+      if (now - lastCheckTime < 20000) return; // Throttle to max once per 20s
       lastCheckTime = now;
 
       try {
-        const headers = {};
-        if (session?.access_token) {
-          headers['Authorization'] = `Bearer ${session.access_token}`;
-        }
-        const res = await fetch('/api/auth/heartbeat', { headers });
+        const res = await fetch('/api/auth/heartbeat', {
+          credentials: 'include',
+          headers: { 'Cache-Control': 'no-cache' },
+        });
+
         if (res.status === 401) {
-          // Session was revoked from another device! Immediately kick to login
+          // Session was revoked or expired in DB! Kick to login
           purgeLocalAuthStorage();
-          const supabase = getSupabaseBrowserClient();
-          if (supabase) {
-            await supabase.auth.signOut().catch(() => {});
-          }
           setUser(null);
           setSession(null);
           setClientCryptoKey(null);
@@ -250,18 +161,16 @@ export function AuthProvider({ children }) {
       clearInterval(interval);
       window.removeEventListener('focus', checkRevocationStatus);
     };
-  }, [user, session?.access_token, router]);
+  }, [user]);
 
   /**
    * Automatic Inactivity Detector & Persistent Logout Timer
-   * Works across app closures, backgrounding, sleep, and mobile screens.
    */
   useEffect(() => {
     if (!user || inactivityMinutes <= 0) return;
 
     const timeoutMs = inactivityMinutes * 60 * 1000;
 
-    // Initialize or load persisted last activity timestamp
     let persisted = null;
     try {
       persisted = window.localStorage?.getItem(LAST_ACTIVITY_STORAGE_KEY);
@@ -271,7 +180,6 @@ export function AuthProvider({ children }) {
     if (persisted) {
       const lastTs = parseInt(persisted, 10);
       if (!isNaN(lastTs) && now - lastTs >= timeoutMs) {
-        // Was inactive while browser was closed or tab was sleeping in background!
         logout(true);
         return;
       }
@@ -287,7 +195,6 @@ export function AuthProvider({ children }) {
     const recordActivity = () => {
       const currentNow = Date.now();
       lastActivityRef.current = currentNow;
-      // Throttle localStorage writes to once every 10 seconds
       if (currentNow - lastWriteTime > 10000) {
         lastWriteTime = currentNow;
         try {
@@ -308,14 +215,13 @@ export function AuthProvider({ children }) {
 
       const idleTime = Date.now() - checkTs;
       if (idleTime >= timeoutMs) {
-        logout(true); // Automatically logout
+        logout(true);
       }
     };
 
     const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click', 'pointerdown'];
     events.forEach((ev) => window.addEventListener(ev, recordActivity, { passive: true }));
 
-    // Immediate check when waking up or switching tabs
     const handleWakeOrFocus = () => {
       checkInactivity();
     };
@@ -345,12 +251,13 @@ export function AuthProvider({ children }) {
   };
 
   /**
-   * Send 6-digit Email OTP
+   * Send 6-digit Email OTP: Frontend -> Backend API (/api/auth/otp) -> DB
    */
   const signInWithOtp = async (email, name = null, isSignUp = false) => {
     const res = await fetch('/api/auth/otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ action: 'send', email, name, isSignUp }),
     });
 
@@ -362,65 +269,13 @@ export function AuthProvider({ children }) {
   };
 
   /**
-   * Verify 6-digit Email OTP
+   * Verify 6-digit Email OTP: Frontend -> Backend API (/api/auth/otp) -> DB
    */
   const verifyOtp = async (email, token, name = null, password = null) => {
-    const supabase = getSupabaseBrowserClient();
-
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.auth.verifyOtp({
-          email: email.trim().toLowerCase(),
-          token: token.trim(),
-          type: 'email',
-        });
-
-        if (!error && data?.user) {
-          const userName =
-            name ||
-            data.user.user_metadata?.full_name ||
-            data.user.user_metadata?.name ||
-            null;
-
-          if (password) {
-            try {
-              await supabase.auth.updateUser({ password });
-            } catch {}
-          }
-
-          setUser({
-            id: data.user.id,
-            email: data.user.email,
-            name: userName,
-            createdAt: data.user.created_at,
-          });
-          setSession(data.session);
-
-          const secretToDerive = password || token;
-          await initializeClientKey(secretToDerive, email);
-
-          try {
-            await fetch('/api/auth/sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                id: data.user.id,
-                email: data.user.email,
-                name: userName,
-                password: password || token,
-              }),
-            });
-          } catch {}
-
-          router.push('/dashboard');
-          return data;
-        }
-      } catch {}
-    }
-
     const res = await fetch('/api/auth/otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ action: 'verify', email, token, name, password }),
     });
 
@@ -431,6 +286,7 @@ export function AuthProvider({ children }) {
 
     if (data.user) {
       setUser(data.user);
+      setSession({ id: data.user.id });
       const secretToDerive = password || token;
       await initializeClientKey(secretToDerive, email);
       router.push('/dashboard');
@@ -440,65 +296,13 @@ export function AuthProvider({ children }) {
   };
 
   /**
-   * Login with email and password
+   * Login: Frontend -> Backend API (/api/auth/login) -> Database
    */
   const login = async (email, password) => {
-    const supabase = getSupabaseBrowserClient();
-
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: email.trim().toLowerCase(),
-          password,
-        });
-
-        if (error) {
-          if (error.message && error.message.toLowerCase().includes('email not confirmed')) {
-            throw new Error('Your email is not confirmed yet. Please check your inbox or disable "Confirm Email" in Supabase Auth settings.');
-          }
-        }
-
-        if (!error && data?.user) {
-          const userName =
-            data.user.user_metadata?.full_name ||
-            data.user.user_metadata?.name ||
-            null;
-
-          setUser({
-            id: data.user.id,
-            email: data.user.email,
-            name: userName,
-            createdAt: data.user.created_at,
-          });
-          setSession(data.session);
-          await initializeClientKey(password, email);
-
-          try {
-            await fetch('/api/auth/sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                id: data.user.id,
-                email: data.user.email,
-                name: userName,
-                password,
-              }),
-            });
-          } catch {}
-
-          router.push('/dashboard');
-          return data;
-        }
-      } catch (e) {
-        if (e.message && e.message.includes('email is not confirmed')) {
-          throw e;
-        }
-      }
-    }
-
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ email, password }),
     });
 
@@ -508,79 +312,24 @@ export function AuthProvider({ children }) {
     }
 
     setUser(data.user);
+    setSession({ id: data.user.id });
     await initializeClientKey(password, email);
     router.push('/dashboard');
     return data;
   };
 
   /**
-   * Register with email, password, and name
+   * Register: Frontend -> Backend API (/api/auth/register) -> Database
    */
   const register = async (email, password, confirmPassword, name = null) => {
     if (confirmPassword && password !== confirmPassword) {
       throw new Error('Passwords do not match');
     }
 
-    const supabase = getSupabaseBrowserClient();
-
-    if (supabase) {
-      try {
-        const options = {};
-        if (name) {
-          options.data = {
-            full_name: name.trim(),
-            name: name.trim(),
-          };
-        }
-
-        const { data, error } = await supabase.auth.signUp({
-          email: email.trim().toLowerCase(),
-          password,
-          options,
-        });
-
-        if (!error && data?.user) {
-          const userName =
-            name ||
-            data.user.user_metadata?.full_name ||
-            data.user.user_metadata?.name ||
-            null;
-
-          if (data.session) {
-            setUser({
-              id: data.user.id,
-              email: data.user.email,
-              name: userName,
-              createdAt: data.user.created_at,
-            });
-            setSession(data.session);
-            await initializeClientKey(password, email);
-          }
-
-          try {
-            await fetch('/api/auth/sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                id: data.user.id,
-                email: data.user.email,
-                name: userName,
-                password,
-              }),
-            });
-          } catch {}
-
-          if (data.session) {
-            router.push('/dashboard');
-          }
-          return data;
-        }
-      } catch {}
-    }
-
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ email, password, confirmPassword, name }),
     });
 
@@ -590,31 +339,20 @@ export function AuthProvider({ children }) {
     }
 
     setUser(data.user);
+    setSession({ id: data.user.id });
     await initializeClientKey(password, email);
     router.push('/dashboard');
     return data;
   };
 
   /**
-   * Request Password Reset Email / OTP
+   * Request Password Reset: Frontend -> Backend API (/api/auth/forgot-password) -> DB
    */
   const resetPasswordForEmail = async (email) => {
-    const supabase = getSupabaseBrowserClient();
-
-    if (supabase) {
-      try {
-        const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/forgot-password` : undefined;
-        const { data, error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-          redirectTo,
-        });
-
-        if (!error) return data;
-      } catch {}
-    }
-
     const res = await fetch('/api/auth/forgot-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ email }),
     });
 
@@ -626,47 +364,18 @@ export function AuthProvider({ children }) {
   };
 
   /**
-   * Verify OTP and Set New Password
+   * Verify Reset Code & Set Password: Frontend -> Backend API (/api/auth/reset-password) -> DB
    */
   const updateUserPasswordWithOtp = async (email, token, newPassword, confirmPassword) => {
     if (confirmPassword && newPassword !== confirmPassword) {
       throw new Error('Passwords do not match');
     }
 
-    const supabase = getSupabaseBrowserClient();
-
-    if (supabase) {
-      try {
-        const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
-          email: email.trim().toLowerCase(),
-          token: token.trim(),
-          type: 'recovery',
-        });
-
-        if (verifyError) {
-          await supabase.auth.verifyOtp({
-            email: email.trim().toLowerCase(),
-            token: token.trim(),
-            type: 'email',
-          });
-        }
-
-        const { error: updateError } = await supabase.auth.updateUser({
-          password: newPassword,
-        });
-
-        if (updateError) {
-          throw new Error(updateError.message || 'Failed to update password');
-        }
-      } catch (err) {
-        console.warn('Supabase reset flow note:', err.message);
-      }
-    }
-
     const res = await fetch('/api/auth/reset-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: newPassword, confirmPassword }),
+      credentials: 'include',
+      body: JSON.stringify({ email, token, password: newPassword, confirmPassword }),
     });
 
     const data = await res.json();
@@ -678,20 +387,16 @@ export function AuthProvider({ children }) {
   };
 
   /**
-   * Logout (Optional: dueToInactivity)
+   * Logout: Frontend -> Backend API (/api/auth/logout) -> Database
    */
   const logout = async (dueToInactivity = false) => {
-    const supabase = getSupabaseBrowserClient();
-    if (supabase) {
-      try {
-        await supabase.auth.signOut();
-      } catch {}
-    }
-
     purgeLocalAuthStorage();
 
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
     } catch {}
 
     setUser(null);
@@ -711,7 +416,7 @@ export function AuthProvider({ children }) {
         user,
         session,
         loading,
-        isSupabaseActive,
+        isSupabaseActive: false,
         clientCryptoKey,
         inactivityMinutes,
         updateInactivityTimeout,

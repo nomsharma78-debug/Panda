@@ -35,6 +35,7 @@ export function CreateFolderModal({ isOpen, onClose, parentId = null, onFolderCr
       const res = await fetch('/api/media/folders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           name: name.trim(),
           parentId,
