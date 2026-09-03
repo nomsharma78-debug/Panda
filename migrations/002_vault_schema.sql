@@ -85,33 +85,62 @@ CREATE INDEX IF NOT EXISTS idx_media_folders_parent ON media_folders(user_id, pa
 
 -- 6. Media Files (Metadata ONLY — binaries reside strictly in User Cloud Object Storage)
 CREATE TABLE IF NOT EXISTS media_files (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    storage_connection_id UUID REFERENCES storage_connections(id) ON DELETE SET NULL,
-    folder_id UUID REFERENCES media_folders(id) ON DELETE SET NULL,
-    object_key VARCHAR(512) NOT NULL,
+    storage_connection_id VARCHAR(36) REFERENCES storage_connections(id) ON DELETE SET NULL,
+    folder_id VARCHAR(36) REFERENCES media_folders(id) ON DELETE SET NULL,
+    storage_provider VARCHAR(50) NOT NULL DEFAULT 's3',
+    storage_object_id VARCHAR(255),
+    storage_object_key VARCHAR(1000),
+    storage_bucket VARCHAR(255),
+    storage_version_id VARCHAR(255),
+    object_key VARCHAR(1000) NOT NULL,
     original_filename VARCHAR(255) NOT NULL,
     mime_type VARCHAR(128) NOT NULL,
     file_size BIGINT NOT NULL,
-    media_type VARCHAR(32) NOT NULL, -- 'photo' | 'video' | 'audio' | 'document' | 'other'
+    media_type VARCHAR(32) NOT NULL DEFAULT 'other', -- 'photo' | 'video' | 'audio' | 'document' | 'other'
+    status VARCHAR(50) NOT NULL DEFAULT 'ACTIVE', -- 'UPLOADING' | 'ACTIVE' | 'DELETING' | 'DELETED' | 'FAILED'
     encrypted BOOLEAN DEFAULT TRUE,
     encryption_metadata JSONB,
-    uploaded_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    uploaded_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE
 );
 
 -- Upgrade existing media_files table if needed
-ALTER TABLE media_files ADD COLUMN IF NOT EXISTS folder_id UUID REFERENCES media_folders(id) ON DELETE SET NULL;
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS folder_id VARCHAR(36) REFERENCES media_folders(id) ON DELETE SET NULL;
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS storage_provider VARCHAR(50) DEFAULT 's3';
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS storage_object_id VARCHAR(255);
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS storage_object_key VARCHAR(1000);
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS storage_bucket VARCHAR(255);
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS storage_version_id VARCHAR(255);
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'ACTIVE';
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
 
 CREATE INDEX IF NOT EXISTS idx_media_files_user ON media_files(user_id);
 CREATE INDEX IF NOT EXISTS idx_media_files_folder ON media_files(user_id, folder_id);
 CREATE INDEX IF NOT EXISTS idx_media_files_user_type ON media_files(user_id, media_type);
 CREATE INDEX IF NOT EXISTS idx_media_files_uploaded_at ON media_files(user_id, uploaded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_media_files_status ON media_files(user_id, status);
 
--- 7. Audit Logs (Tamper-evident Security History)
+-- 7. User Storage Quotas & Atomic Byte Tracking (Authoritative Usage Cache)
+CREATE TABLE IF NOT EXISTS user_storage (
+    id VARCHAR(36) PRIMARY KEY,
+    user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    used_bytes BIGINT NOT NULL DEFAULT 0,
+    reserved_bytes BIGINT NOT NULL DEFAULT 0,
+    storage_limit_bytes BIGINT NOT NULL DEFAULT 10737418240, -- 10 GB Default
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_recalculated_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_storage_user ON user_storage(user_id);
+
+-- 8. Audit Logs (Tamper-evident Security History)
 CREATE TABLE IF NOT EXISTS audit_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     action VARCHAR(64) NOT NULL,
     status VARCHAR(16) NOT NULL, -- 'SUCCESS' | 'FAILURE'

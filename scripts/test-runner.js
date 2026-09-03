@@ -498,6 +498,116 @@ async function runAuditTests() {
   assert(aViewOfA.encrypted_config === undefined, 'Storage connection safe view never exposes encrypted_config');
 
   // ----------------------------------------------------
+  // TEST GROUP 13: UNIVERSAL MULTI-CLOUD STORAGE MANAGEMENT & QUOTA ENFORCEMENT
+  // ----------------------------------------------------
+  console.log('\n[AUDIT GROUP 13] Universal Multi-Cloud Storage Management, Quota Enforcement & Reconciliation');
+
+  const { ProviderFactory } = await import('../lib/storage/provider-factory.js');
+  const { StorageService } = await import('../lib/storage/storage-service.js');
+  const { getUserStorageMetrics, reserveUserStorageAtomic, releaseUserStorageReservation, finalizeUserStorageUpload, decreaseUserStorage, updateUserStorageLimit } = await import('../lib/db/storage.js');
+  const { BackblazeB2Adapter } = await import('../lib/storage/providers/backblaze-b2.js');
+  const { AwsS3Adapter } = await import('../lib/storage/providers/aws-s3.js');
+  const { CloudflareR2Adapter } = await import('../lib/storage/providers/cloudflare-r2.js');
+  const { WasabiAdapter } = await import('../lib/storage/providers/wasabi.js');
+  const { MinioAdapter } = await import('../lib/storage/providers/minio.js');
+  const { LocalVaultStorageProvider } = await import('../lib/storage/providers/local-vault.js');
+
+  // 1. StorageProvider Contract Verification across all Adapters
+  const adapters = [
+    new BackblazeB2Adapter({ bucket: 'test-b2-bucket', accessKey: 'k', secretKey: 's' }),
+    new AwsS3Adapter({ bucket: 'test-s3-bucket', accessKey: 'k', secretKey: 's' }),
+    new CloudflareR2Adapter({ bucket: 'test-r2-bucket', accountId: 'acc', accessKey: 'k', secretKey: 's' }),
+    new WasabiAdapter({ bucket: 'test-wasabi-bucket', accessKey: 'k', secretKey: 's' }),
+    new MinioAdapter({ bucket: 'test-minio-bucket', accessKey: 'k', secretKey: 's' }),
+    new LocalVaultStorageProvider(),
+  ];
+
+  const requiredMethods = ['uploadObject', 'downloadObject', 'deleteObject', 'headObject', 'listObjects', 'getSignedDownloadUrl', 'getSignedUploadUrl', 'objectExists', 'getUsage', 'testConnection'];
+
+  for (const ad of adapters) {
+    for (const m of requiredMethods) {
+      assert(typeof ad[m] === 'function', `Adapter ${ad.constructor.name} satisfies StorageProvider contract method: ${m}`);
+    }
+    assert(typeof ad.capabilities === 'object', `Adapter ${ad.constructor.name} declares capability metadata`);
+  }
+
+  // 2. Multi-Cloud Provider Factory Resolution
+  const b2Adapter = ProviderFactory.getProvider('backblaze', { bucket: 'my-b2' });
+  assert(b2Adapter instanceof BackblazeB2Adapter, 'ProviderFactory resolves Backblaze B2 adapter');
+
+  const s3Adapter = ProviderFactory.getProvider('aws-s3', { bucket: 'my-s3' });
+  assert(s3Adapter instanceof AwsS3Adapter, 'ProviderFactory resolves AWS S3 adapter');
+
+  const r2Adapter = ProviderFactory.getProvider('cloudflare-r2', { bucket: 'my-r2' });
+  assert(r2Adapter instanceof CloudflareR2Adapter, 'ProviderFactory resolves Cloudflare R2 adapter');
+
+  // 3. User Storage Quota Initial State & BIGINT Calculations
+  const quotaUser = await createUser(`quota_user_${Date.now()}@example.com`, 'Argon2idHashQ');
+  const initialMetrics = await getUserStorageMetrics(quotaUser.id);
+  assert(initialMetrics.usedBytes === 0, 'Initial user storage usedBytes is exactly 0');
+  assert(initialMetrics.reservedBytes === 0, 'Initial user storage reservedBytes is exactly 0');
+  assert(initialMetrics.limitBytes === 10737418240, 'Initial user storage limitBytes is exactly 10 GB (10737418240 bytes)');
+  assert(initialMetrics.remainingBytes === 10737418240, 'Initial user storage remainingBytes is exactly 10 GB');
+  assert(initialMetrics.percentage === 0, 'Initial user storage percentage is 0.00%');
+
+  // 4. Atomic Storage Quota Reservation & Concurrency Validation
+  const uploadSize50MB = 50 * 1024 * 1024;
+  const res1 = await reserveUserStorageAtomic(quotaUser.id, uploadSize50MB);
+  assert(res1.allowed === true, 'Quota reservation allowed for upload within 10GB limit');
+  assert(res1.reservedBytes === uploadSize50MB, 'Reserved bytes increased atomically');
+
+  // Over-quota reservation attempt (11 GB exceeds 10 GB limit)
+  const uploadSize11GB = 11 * 1024 * 1024 * 1024;
+  const res2 = await reserveUserStorageAtomic(quotaUser.id, uploadSize11GB);
+  assert(res2.allowed === false, 'Atomic reservation rejects upload exceeding storage quota');
+
+  // Rollback reservation
+  await releaseUserStorageReservation(quotaUser.id, uploadSize50MB);
+  const afterRollback = await getUserStorageMetrics(quotaUser.id);
+  assert(afterRollback.reservedBytes === 0, 'Reservation released and rolled back to 0 bytes on cancellation');
+
+  // 5. Multi-Cloud Upload via StorageService with AES-256-GCM Encryption
+  const testFilePayload = Buffer.from('Universal Multi-Cloud Object Storage Test Payload 2026!');
+  const uploadRecord = await StorageService.uploadUserFile(quotaUser.id, {
+    fileBuffer: testFilePayload,
+    filename: 'multi-cloud-document.txt',
+    contentType: 'text/plain',
+    encrypted: true,
+  });
+
+  assert(uploadRecord.id, 'StorageService created unique application file record');
+  assert(uploadRecord.object_key.startsWith(`users/${quotaUser.id}/${uploadRecord.id}/`), 'Object key adheres to universal users/{userId}/{fileId}/{filename} structure');
+  assert(uploadRecord.status === 'ACTIVE', 'File record status initialized to ACTIVE');
+  assert(uploadRecord.encrypted === true, 'File payload encrypted with AES-256-GCM');
+
+  const metricsAfterUpload = await getUserStorageMetrics(quotaUser.id);
+  assert(metricsAfterUpload.usedBytes === testFilePayload.length, 'Used storage incremented by exact byte size');
+  assert(metricsAfterUpload.reservedBytes === 0, 'Reserved storage finalized and cleared after upload');
+
+  // 6. Multi-Tenant Ownership & Cross-User Deletion Defense
+  const strangerUser = await createUser(`stranger_${Date.now()}@example.com`, 'Argon2idHashS');
+  let unauthorizedDeleteFailed = false;
+  try {
+    await StorageService.deleteUserFile(strangerUser.id, uploadRecord.id);
+  } catch (err) {
+    unauthorizedDeleteFailed = true;
+    assert(err.code === 'FILE_NOT_FOUND' || err.statusCode === 404, 'Cross-user file deletion strictly rejected');
+  }
+  assert(unauthorizedDeleteFailed === true, 'Stranger user cannot delete another user file');
+
+  // 7. Legitimate Deletion & Usage Decrement
+  const deleteResult = await StorageService.deleteUserFile(quotaUser.id, uploadRecord.id);
+  assert(deleteResult.success === true, 'Owner successfully deleted own file');
+
+  const metricsAfterDelete = await getUserStorageMetrics(quotaUser.id);
+  assert(metricsAfterDelete.usedBytes === 0, 'Storage usage decremented back to 0 bytes after file deletion');
+
+  // 8. Storage Reconciliation Engine
+  const reconcileReport = await StorageService.recalculateUserStorage(quotaUser.id);
+  assert(typeof reconcileReport === 'object', 'recalculateUserStorage returned reconciliation report');
+  assert(reconcileReport.reconciledUsage.usedBytes === 0, 'Reconciliation confirms zero active usage');
+
+  // ----------------------------------------------------
   // SUMMARY
   // ----------------------------------------------------
   console.log('\n=================================================================');
