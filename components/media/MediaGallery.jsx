@@ -174,32 +174,15 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     }
   }, [currentFolder, activeFilter, searchQuery, getHeaders]);
 
-  // On mount: check storage + load content in parallel
+  // Load content on mount and whenever auth token, folder, filter, or search changes
   useEffect(() => {
     mountedRef.current = true;
     checkStorage(false);
     fetchContent({});
     return () => {
-      mountedRef.current = false;
       if (abortRef.current) abortRef.current.abort();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // When auth session/token resolves or updates, silently refresh content
-  useEffect(() => {
-    if (session?.access_token && firstLoadDoneRef.current) {
-      fetchContent({});
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.access_token]);
-
-  // Re-fetch when folder/filter/search changes
-  useEffect(() => {
-    if (!firstLoadDoneRef.current) return;
-    fetchContent({});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentFolder, activeFilter, searchQuery]);
+  }, [session?.access_token, currentFolder, activeFilter, searchQuery, checkStorage, fetchContent]);
 
   // Listen to global upload/storage events
   useEffect(() => {
