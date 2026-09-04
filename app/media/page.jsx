@@ -31,8 +31,8 @@ export default function MediaPage() {
           setUploadOpen(false);
           setActiveFolderId(null);
         }}
-        onUploadSuccess={(newItems) => {
-          window.dispatchEvent(new CustomEvent('panda:media:uploaded', { detail: { newItems } }));
+        onUploadSuccess={() => {
+          // Event already dispatched with newItems by MediaUploadModal
         }}
         onOpenConnectStorage={() => {
           setUploadOpen(false);

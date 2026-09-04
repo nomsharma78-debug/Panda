@@ -22,7 +22,10 @@ export async function GET(request) {
     else if (parentIdParam) parentId = parentIdParam;
     else parentId = null; // Default to root folders only
 
+    const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
+
     const folders = await listUserFolders(authData.user.id, {
+      token,
       parentId,
       storageConnectionId: storageConnectionId || undefined,
     });

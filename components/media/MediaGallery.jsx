@@ -183,8 +183,12 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     } catch {}
   }, [session?.access_token]);
 
+  const currentFolderRef = React.useRef(currentFolder);
+  currentFolderRef.current = currentFolder;
+
   const handleNavigateFolder = useCallback((folder) => {
     setCurrentFolder(folder);
+    currentFolderRef.current = folder;
     const key = folder ? `media:folder:${folder.id}` : 'media:root';
     const cached = pandaCache.get(key);
     if (cached) {
@@ -200,7 +204,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
 
   // Fast fetch: only media + folders with smart SWR caching
   const fetchContent = useCallback(async (opts = {}) => {
-    const { folder = currentFolder, filter = activeFilter, search = searchQuery, sync = false, force = false, silent = false } = opts;
+    const { folder = currentFolderRef.current, filter = activeFilter, search = searchQuery, sync = false, force = false, silent = false } = opts;
 
     const cacheKey = folder ? `media:folder:${folder.id}` : 'media:root';
 
@@ -259,23 +263,23 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         setLoading(false);
       }
     }
-  }, [currentFolder, activeFilter, searchQuery, session?.access_token]);
+  }, [activeFilter, searchQuery, session?.access_token]);
 
   // Load content on mount and whenever auth token, folder, filter, or search changes
   useEffect(() => {
     checkStorage(false);
-    fetchContent({});
+    fetchContent({ folder: currentFolder });
   }, [session?.access_token, currentFolder, activeFilter, searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Silent background revalidation on window focus and interval (0ms interruption, zero page flash)
   useEffect(() => {
     const handleFocus = () => {
-      fetchContent({ silent: true });
+      fetchContent({ folder: currentFolderRef.current, silent: true });
     };
     window.addEventListener('focus', handleFocus);
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        fetchContent({ silent: true });
+        fetchContent({ folder: currentFolderRef.current, silent: true });
       }
     }, 20_000);
 
@@ -288,8 +292,9 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   // Listen to global upload/storage events
   useEffect(() => {
     const handleMediaUploaded = (e) => {
+      const activeFolder = currentFolderRef.current;
+      const currentTargetFolder = activeFolder?.id || null;
       if (e?.detail?.newItems && Array.isArray(e.detail.newItems) && e.detail.newItems.length > 0) {
-        const currentTargetFolder = currentFolder?.id || null;
         const matching = e.detail.newItems.filter(m => (m.folder_id || null) === currentTargetFolder);
         if (matching.length > 0) {
           setMediaList((prev) => {
@@ -300,7 +305,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         }
       }
       pandaCache.invalidatePrefix('media:');
-      fetchContent({ silent: true });
+      fetchContent({ folder: activeFolder, silent: true, force: true });
     };
 
     const handleStorageUpdated = () => {
