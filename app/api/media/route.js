@@ -3,6 +3,10 @@ import { getAuthenticatedUser } from '@/lib/auth/session';
 import { listUserMedia } from '@/lib/db/media';
 import { StorageManager } from '@/lib/storage/storage-manager';
 
+// In-memory auto-sync throttling map to prevent excessive cloud bucket requests on rapid UI polling
+const lastAutoSyncByUser = new Map();
+const AUTO_SYNC_INTERVAL_MS = 6000; // Auto-reconcile bucket every 6 seconds on active use
+
 export async function GET(request) {
   const authData = await getAuthenticatedUser(request);
   if (!authData) {
@@ -23,7 +27,21 @@ export async function GET(request) {
   const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
 
   try {
-    let items = await listUserMedia(authData.user.id, {
+    const shouldSync = searchParams.get('sync') === 'true';
+    const lastSync = lastAutoSyncByUser.get(authData.user.id) || 0;
+    const now = Date.now();
+
+    // Automatic silent cloud bucket reconciliation: runs if explicitly requested OR automatically in background
+    if (shouldSync || (now - lastSync > AUTO_SYNC_INTERVAL_MS)) {
+      lastAutoSyncByUser.set(authData.user.id, now);
+      try {
+        await StorageManager.syncStorageMedia(authData.user.id, token);
+      } catch (syncErr) {
+        console.warn('[API media] Auto-sync notice:', syncErr.message);
+      }
+    }
+
+    const items = await listUserMedia(authData.user.id, {
       token,
       mediaType,
       folderId,
@@ -31,27 +49,6 @@ export async function GET(request) {
       limit,
       offset,
     });
-
-    // Auto-discover files in connected cloud storage ONLY when explicit sync requested by user
-    const shouldSync = searchParams.get('sync') === 'true';
-    if (shouldSync) {
-      try {
-        const synced = await StorageManager.syncStorageMedia(authData.user.id, token);
-        if (synced && synced.length > 0) {
-          const reloaded = await listUserMedia(authData.user.id, {
-            token,
-            mediaType,
-            folderId,
-            search,
-            limit,
-            offset,
-          });
-          items = reloaded.length > 0 ? reloaded : synced;
-        }
-      } catch (syncErr) {
-        console.warn('[API media] sync notice:', syncErr.message);
-      }
-    }
 
     return NextResponse.json(
       {
