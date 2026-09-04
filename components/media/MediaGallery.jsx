@@ -164,14 +164,8 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       if (mediaRes.ok) {
         const data = await mediaRes.json();
         newItems = data.items || [];
-        setMediaList((prev) => {
-          // If server returned items, use them; if server returned 0 items but we already had items and no filter/search, keep previous
-          if (newItems.length > 0 || (filter !== 'all' || search)) {
-            return newItems;
-          }
-          return prev.length > 0 ? prev : newItems;
-        });
-        if (filter === 'all' && !search && newItems.length > 0) {
+        setMediaList(newItems);
+        if (filter === 'all' && !search) {
           pandaCache.set(cacheKey, { items: newItems, folders: newFolders }, 120_000);
         }
       }
@@ -286,8 +280,12 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
 
   const executeDelete = async () => {
     setIsDeleting(true);
+    setLightboxOpen(false);
     try {
       pandaCache.invalidatePrefix('media:');
+      pandaCache.invalidate('storage:metrics');
+      pandaCache.invalidate('storage:connections');
+
       if (deleteTarget === 'bulk') {
         const ids = Array.from(selectedIds);
         // Optimistically remove from UI immediately
@@ -308,11 +306,11 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
           success(`Deleted "${deleteTarget.original_filename}"`);
         } else {
           toastError('Failed to delete file');
-          fetchContent({ force: true }); // Restore list on failure
         }
       }
       setDeleteTarget(null);
-      fetchContent({ force: true });
+      await fetchContent({ force: true });
+      window.dispatchEvent(new CustomEvent('panda:storage:updated'));
     } catch {
       toastError('Network error deleting files');
     } finally {

@@ -31,8 +31,8 @@ export async function GET(request) {
       offset,
     });
 
-    // Auto-discover files in connected cloud storage if DB has 0 items or explicit sync requested
-    const shouldSync = searchParams.get('sync') === 'true' || (items.length === 0 && (!folderIdParam || folderIdParam === 'root') && mediaType === 'all' && !search);
+    // Auto-discover files in connected cloud storage ONLY when explicit sync requested by user
+    const shouldSync = searchParams.get('sync') === 'true';
     if (shouldSync) {
       try {
         const synced = await StorageManager.syncStorageMedia(authData.user.id, token);
