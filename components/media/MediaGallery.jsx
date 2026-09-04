@@ -295,13 +295,38 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       const activeFolder = currentFolderRef.current;
       const currentTargetFolder = activeFolder?.id || null;
       if (e?.detail?.newItems && Array.isArray(e.detail.newItems) && e.detail.newItems.length > 0) {
-        const matching = e.detail.newItems.filter(m => (m.folder_id || null) === currentTargetFolder);
+        const newItems = e.detail.newItems;
+        const matching = newItems.filter(m => (m.folder_id || null) === currentTargetFolder);
         if (matching.length > 0) {
           setMediaList((prev) => {
             const existingIds = new Set(prev.map((m) => m.id));
             const toAdd = matching.filter((m) => !existingIds.has(m.id));
             return [...toAdd, ...prev];
           });
+        }
+
+        // Optimistically update folder item count and size
+        const folderIdCounts = {};
+        newItems.forEach((m) => {
+          if (m.folder_id) {
+            if (!folderIdCounts[m.folder_id]) folderIdCounts[m.folder_id] = { count: 0, size: 0 };
+            folderIdCounts[m.folder_id].count += 1;
+            folderIdCounts[m.folder_id].size += Number(m.file_size) || 0;
+          }
+        });
+
+        if (Object.keys(folderIdCounts).length > 0) {
+          setFolders((prev) => prev.map((f) => {
+            const added = folderIdCounts[f.id];
+            if (added) {
+              return {
+                ...f,
+                file_count: (f.file_count || 0) + added.count,
+                total_bytes: (f.total_bytes || 0) + added.size,
+              };
+            }
+            return f;
+          }));
         }
       }
       pandaCache.invalidatePrefix('media:');
