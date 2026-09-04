@@ -20,41 +20,26 @@ export async function GET(request) {
   }
 
   const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
+  const shouldSync = new URL(request.url).searchParams.get('sync') === 'true';
 
   try {
-    // 1. Auto-discover any new files in cloud bucket (such as media/ or test files)
-    try {
-      await StorageManager.syncStorageMedia(authData.user.id, token);
-    } catch (syncErr) {
-      console.warn('[Storage GET sync notice]:', syncErr.message);
-    }
-
-    let connections = await listUserStorageConnections(authData.user.id, token);
-
-    // 2. Refresh live real-time usage from cloud providers
-    if (connections && connections.length > 0) {
-      for (const conn of connections) {
-        try {
-          const storageRecord = await getStorageConnectionInternal(conn.id, authData.user.id, token);
-          if (storageRecord) {
-            const provider = StorageManager.getProviderFromRecord(storageRecord);
-            const usage = await provider.getUsage();
-            if (usage && typeof usage.usedBytes === 'number') {
-              await updateStorageUsage(authData.user.id, conn.id, usage);
-            }
-          }
-        } catch (e) {
-          console.warn('[Storage GET usage check]:', e.message);
-        }
+    // Cloud storage bucket reconciliation only runs when explicitly requested (e.g. ?sync=true)
+    if (shouldSync) {
+      try {
+        await StorageManager.syncStorageMedia(authData.user.id, token);
+      } catch (syncErr) {
+        console.warn('[Storage GET sync notice]:', syncErr.message);
       }
-      connections = await listUserStorageConnections(authData.user.id, token);
     }
 
-    const combined = await getCombinedStorageMetrics(authData.user.id, token);
+    const [connections, combined] = await Promise.all([
+      listUserStorageConnections(authData.user.id, token),
+      getCombinedStorageMetrics(authData.user.id, token),
+    ]);
 
     return NextResponse.json({
-      connections,
-      combined,
+      connections: connections || [],
+      combined: combined || null,
     });
   } catch (err) {
     console.error('List storage connections error:', err);

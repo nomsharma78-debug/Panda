@@ -96,6 +96,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   const [howItWorksOpen, setHowItWorksOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const firstLoadDoneRef = React.useRef(hasValidCache);
 
@@ -244,6 +245,26 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Explicit cloud storage sync handler (non-blocking, zero screen flicker, zero media wipe)
+  const handleSync = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      pandaCache.invalidate('media:list');
+      pandaCache.invalidate('storage:connections');
+      pandaCache.invalidate('storage:metrics');
+      await fetchContent({ sync: true, force: true, silent: true });
+      await checkStorage(true);
+      window.dispatchEvent(new CustomEvent('panda:storage:updated'));
+      success('Cloud storage synchronized.');
+    } catch (err) {
+      console.error('[MediaGallery] Sync error:', err);
+      toastError('Failed to synchronize cloud storage.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Date grouping utility
   const groupedMedia = useMemo(() => {
@@ -435,19 +456,11 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
               variant="ghost"
               size="sm"
               icon={RefreshCw}
-              onClick={async () => {
-                setLoading(true);
-                pandaCache.invalidate('media:list');
-                pandaCache.invalidate('storage:connections');
-                pandaCache.invalidate('storage:metrics');
-                await fetchContent({ sync: true });
-                await checkStorage(true);
-                window.dispatchEvent(new CustomEvent('panda:storage:updated'));
-                success('Cloud storage synchronized.');
-              }}
+              isLoading={isSyncing}
+              onClick={handleSync}
               title="Synchronize all files from cloud storage buckets"
             >
-              Sync
+              {isSyncing ? 'Syncing...' : 'Sync'}
             </Button>
           )}
 
@@ -469,6 +482,17 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
           </Button>
         </div>
       </div>
+
+      {/* Syncing Live Indicator Banner */}
+      {isSyncing && (
+        <div className="flex items-center justify-between px-4 py-2.5 rounded-2xl bg-teal-500/10 border border-teal-500/20 text-teal-300 text-xs font-medium animate-pulse">
+          <div className="flex items-center gap-2">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin text-teal-400 shrink-0" />
+            <span>Syncing library with connected cloud storage...</span>
+          </div>
+          <span className="text-[11px] text-teal-400/70 font-mono">Reconciling bucket</span>
+        </div>
+      )}
 
       {/* Bulk Action Sticky Bar */}
       {selectedIds.size > 0 && (
