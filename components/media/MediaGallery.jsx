@@ -139,11 +139,11 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       const params = new URLSearchParams();
       if (filter !== 'all') params.set('type', filter);
       if (search) params.set('search', search);
-      if (folder) params.set('folderId', folder.id);
+      params.set('folderId', folder ? folder.id : 'root');
       if (sync) params.set('sync', 'true');
       if (session?.access_token) params.set('token', session.access_token);
 
-      const foldersUrl = `/api/media/folders${folder ? `?parentId=${folder.id}` : ''}`;
+      const foldersUrl = `/api/media/folders?parentId=${folder ? folder.id : 'root'}`;
       const mediaUrl = `/api/media?${params.toString()}`;
       const headers = { 'Cache-Control': 'no-cache' };
       if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
@@ -188,11 +188,15 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   useEffect(() => {
     const handleMediaUploaded = (e) => {
       if (e?.detail?.newItems && Array.isArray(e.detail.newItems) && e.detail.newItems.length > 0) {
-        setMediaList((prev) => {
-          const existingIds = new Set(prev.map((m) => m.id));
-          const toAdd = e.detail.newItems.filter((m) => !existingIds.has(m.id));
-          return [...toAdd, ...prev];
-        });
+        const currentTargetFolder = currentFolder?.id || null;
+        const matching = e.detail.newItems.filter(m => (m.folder_id || null) === currentTargetFolder);
+        if (matching.length > 0) {
+          setMediaList((prev) => {
+            const existingIds = new Set(prev.map((m) => m.id));
+            const toAdd = matching.filter((m) => !existingIds.has(m.id));
+            return [...toAdd, ...prev];
+          });
+        }
       }
       pandaCache.invalidatePrefix('media:');
       fetchContent({});

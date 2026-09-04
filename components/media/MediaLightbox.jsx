@@ -33,7 +33,7 @@ export function MediaLightbox({
   onIndexChange,
   onDelete,
 }) {
-  const { session } = useAuth();
+  const { session, loading: authLoading } = useAuth();
 
   // Lightbox manages its own internal index so navigation is instant
   const [internalIndex, setInternalIndex] = useState(initialIndex);
@@ -108,6 +108,8 @@ export function MediaLightbox({
       return;
     }
 
+    if (authLoading) return;
+
     let cancelled = false;
     setPhotoLoading(true);
     setPhotoError(false);
@@ -116,12 +118,17 @@ export function MediaLightbox({
     const tokenQuery = session?.access_token ? `?token=${encodeURIComponent(session.access_token)}` : '';
     const mediaUrl = `/api/media/${currentItem.id}/access${tokenQuery}`;
 
+    const headers = {};
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+
     fetch(mediaUrl, {
-      headers: session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {},
+      headers,
       credentials: 'include',
     })
       .then((res) => {
-        if (!res.ok) throw new Error('Unauthorized');
+        if (!res.ok) throw new Error(`Status ${res.status}`);
         return res.blob();
       })
       .then((blob) => {
@@ -132,8 +139,9 @@ export function MediaLightbox({
           setPhotoLoading(false);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (!cancelled) {
+          console.warn('[MediaLightbox] Image fetch note:', err.message);
           setPhotoError(true);
           setPhotoLoading(false);
         }
@@ -142,7 +150,7 @@ export function MediaLightbox({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, currentItem?.id, isPhoto, session?.access_token]);
+  }, [isOpen, currentItem?.id, isPhoto, session?.access_token, authLoading]);
 
   // Revoke blob on unmount or close
   useEffect(() => {

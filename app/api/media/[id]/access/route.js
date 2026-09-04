@@ -29,7 +29,7 @@ export async function GET(request, { params }) {
         'Content-Type': mimeType || 'application/octet-stream',
         'Content-Length': String(size),
         'Content-Disposition': `inline; filename="${encodeURIComponent(filename || 'file')}"`,
-        'Cache-Control': 'private, max-age=300',
+        'Cache-Control': 'private, max-age=3600, stale-while-revalidate=86400',
         'X-Content-Type-Options': 'nosniff',
       },
     });

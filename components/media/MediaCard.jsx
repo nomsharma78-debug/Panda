@@ -83,6 +83,11 @@ export function MediaCard({
       return () => {};
     }
 
+    // Wait if auth context is still actively checking session
+    if (authLoading) {
+      return () => {};
+    }
+
     let cancelled = false;
     setImgLoading(true);
     setImgError(null);
@@ -114,11 +119,12 @@ export function MediaCard({
       })
       .catch((err) => {
         if (!cancelled) {
-          if (retryCountRef.current < 2) {
+          if (retryCountRef.current < 3) {
+            const retryDelay = Math.min(300 * Math.pow(2, retryCountRef.current), 1500);
             retryCountRef.current++;
             setTimeout(() => {
               if (!cancelled) loadMediaBinary();
-            }, 1000);
+            }, retryDelay);
           } else {
             console.warn('[MediaCard] Media load failed after retries:', targetMedia.id, err.message);
             setImgError(err.message || 'Failed to load');
@@ -130,12 +136,12 @@ export function MediaCard({
     return () => {
       cancelled = true;
     };
-  }, [isPhoto, isVideo, targetMedia.id, session?.access_token]);
+  }, [isPhoto, isVideo, targetMedia.id, session?.access_token, authLoading]);
 
   useEffect(() => {
     const cleanup = loadMediaBinary();
     return cleanup;
-  }, [loadMediaBinary, session?.access_token]);
+  }, [loadMediaBinary, session?.access_token, authLoading]);
 
   return (
     <div

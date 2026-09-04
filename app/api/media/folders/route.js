@@ -13,11 +13,17 @@ export async function GET(request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const parentId = searchParams.get('parentId') || null;
+    const parentIdParam = searchParams.get('parentId');
     const storageConnectionId = searchParams.get('storageConnectionId') || null;
 
+    let parentId = undefined;
+    if (parentIdParam === 'root' || parentIdParam === 'null') parentId = null;
+    else if (parentIdParam === 'all') parentId = undefined;
+    else if (parentIdParam) parentId = parentIdParam;
+    else parentId = null; // Default to root folders only
+
     const folders = await listUserFolders(authData.user.id, {
-      parentId: parentId || undefined,
+      parentId,
       storageConnectionId: storageConnectionId || undefined,
     });
 

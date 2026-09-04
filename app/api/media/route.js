@@ -16,7 +16,8 @@ export async function GET(request) {
   const limit = parseInt(searchParams.get('limit') || '500', 10);
   const offset = parseInt(searchParams.get('offset') || '0', 10);
   let folderId = undefined;
-  if (folderIdParam === 'root') folderId = null;
+  if (folderIdParam === 'root' || folderIdParam === 'null' || !folderIdParam) folderId = null;
+  else if (folderIdParam === 'all') folderId = undefined;
   else if (folderIdParam) folderId = folderIdParam;
 
   const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');

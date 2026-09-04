@@ -485,7 +485,7 @@ export function VideoPlayer({
       {/* Video Controls Gradient Overlay */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent pt-10 pb-3 px-4 transition-opacity duration-200 z-20 ${
+        className={`absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent pt-8 sm:pt-10 pb-2.5 sm:pb-3 px-3 sm:px-4 transition-opacity duration-200 z-20 w-full ${
           showControls || !isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
@@ -530,13 +530,13 @@ export function VideoPlayer({
         </div>
 
         {/* Video Controls Row */}
-        <div className="flex items-center justify-between text-white text-xs">
+        <div className="flex items-center justify-between text-white text-xs w-full gap-2">
           {/* Left Buttons: Play, Next/Skip, Volume, Time */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 flex-1 overflow-hidden">
             {/* Play/Pause Button */}
             <button
               onClick={togglePlay}
-              className="p-1 text-white hover:text-teal-300 transition-colors focus:outline-none"
+              className="p-1 shrink-0 text-white hover:text-teal-300 transition-colors focus:outline-none"
               aria-label={isPlaying ? 'Pause (k)' : 'Play (k)'}
               title={isPlaying ? 'Pause (k)' : 'Play (k)'}
             >
@@ -547,26 +547,26 @@ export function VideoPlayer({
               )}
             </button>
 
-            {/* Skip -10s Button */}
+            {/* Skip -10s Button (Hidden on very narrow containers) */}
             <button
               onClick={() => seekBy(-10)}
-              className="p-1 text-slate-300 hover:text-teal-300 transition-colors"
+              className="p-1 shrink-0 text-slate-300 hover:text-teal-300 transition-colors hidden sm:inline-flex"
               title="Rewind 10 seconds (j)"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
 
-            {/* Skip +10s Button */}
+            {/* Skip +10s Button (Hidden on very narrow containers) */}
             <button
               onClick={() => seekBy(10)}
-              className="p-1 text-slate-300 hover:text-teal-300 transition-colors"
+              className="p-1 shrink-0 text-slate-300 hover:text-teal-300 transition-colors hidden sm:inline-flex"
               title="Fast forward 10 seconds (l)"
             >
               <RotateCw className="w-4 h-4" />
             </button>
 
             {/* Volume Control Group with Expandable Slider */}
-            <div className="flex items-center group/vol">
+            <div className="flex items-center group/vol shrink-0">
               <button
                 onClick={toggleMute}
                 className="p-1 text-white hover:text-teal-300 transition-colors focus:outline-none"
@@ -588,12 +588,12 @@ export function VideoPlayer({
                 step="0.05"
                 value={isMuted ? 0 : volume}
                 onChange={handleVolumeChange}
-                className="w-0 group-hover/vol:w-16 focus:w-16 transition-all duration-200 h-1 bg-white/30 rounded-lg appearance-none cursor-pointer accent-teal-400 ml-1.5 opacity-0 group-hover/vol:opacity-100 focus:opacity-100"
+                className="w-0 group-hover/vol:w-14 sm:group-hover/vol:w-16 focus:w-14 sm:focus:w-16 transition-all duration-200 h-1 bg-white/30 rounded-lg appearance-none cursor-pointer accent-teal-400 ml-1 opacity-0 group-hover/vol:opacity-100 focus:opacity-100"
               />
             </div>
 
             {/* Current Time / Total Duration */}
-            <div className="text-[12px] font-mono text-slate-300 ml-1 select-none">
+            <div className="text-[11px] sm:text-xs font-mono text-slate-300 ml-0.5 select-none shrink-0 truncate">
               <span className="text-teal-300 font-semibold">{formatTime(currentTime)}</span>
               <span className="mx-1 text-slate-500">/</span>
               <span>{formatTime(duration)}</span>
@@ -601,35 +601,24 @@ export function VideoPlayer({
           </div>
 
           {/* Right Buttons: Loop, PiP, Settings, Fullscreen */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* Loop Toggle */}
-            <button
-              onClick={toggleLoop}
-              className={`p-1.5 rounded-lg transition-colors ${
-                isLooping ? 'text-teal-400 bg-teal-500/20' : 'text-slate-300 hover:text-white'
-              }`}
-              title={isLooping ? 'Loop is ON' : 'Loop is OFF'}
-            >
-              <Repeat className="w-4 h-4" />
-            </button>
-
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0 ml-auto">
             {/* Picture-in-Picture */}
             <button
               onClick={togglePiP}
-              className="p-1.5 text-slate-300 hover:text-white transition-colors"
+              className="p-1.5 shrink-0 text-slate-300 hover:text-white transition-colors hidden sm:inline-flex"
               title="Miniplayer / Picture in Picture (p)"
             >
               <PictureInPicture2 className="w-4 h-4" />
             </button>
 
             {/* Settings Menu Gear */}
-            <div className="relative">
+            <div className="relative shrink-0">
               <button
                 onClick={() => {
                   setShowSettings(!showSettings);
                   setSettingsSubmenu(null);
                 }}
-                className={`p-1.5 rounded-lg transition-transform duration-200 ${
+                className={`p-1.5 shrink-0 rounded-lg transition-transform duration-200 ${
                   showSettings ? 'text-teal-400 rotate-45' : 'text-slate-300 hover:text-white'
                 }`}
                 title="Settings"
@@ -639,9 +628,9 @@ export function VideoPlayer({
 
               {/* Settings Pop-up Menu */}
               {showSettings && (
-                <div className="absolute bottom-full right-0 mb-3 w-52 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-2xl shadow-2xl p-2 z-40 text-xs animate-slide-up">
+                <div className="absolute bottom-full right-0 mb-3 w-48 sm:w-52 max-w-[calc(100vw-2rem)] bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-2xl shadow-2xl p-2 z-40 text-xs animate-slide-up">
                   {settingsSubmenu === 'speed' ? (
-                     <div>
+                    <div>
                       <div
                         onClick={() => setSettingsSubmenu(null)}
                         className="flex items-center gap-2 p-2 text-slate-400 hover:text-white cursor-pointer border-b border-slate-800 mb-1"
@@ -697,11 +686,11 @@ export function VideoPlayer({
             {/* Fullscreen Toggle */}
             <button
               onClick={toggleFullscreen}
-              className="p-1 text-white hover:text-teal-300 transition-colors focus:outline-none"
+              className="p-1.5 shrink-0 text-white hover:text-teal-300 transition-colors focus:outline-none"
               aria-label={isFullscreen ? 'Exit full screen (f)' : 'Full screen (f)'}
               title={isFullscreen ? 'Exit full screen (f)' : 'Full screen (f)'}
             >
-              {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+              {isFullscreen ? <Minimize className="w-4 h-4 sm:w-5 sm:h-5" /> : <Maximize className="w-4 h-4 sm:w-5 sm:h-5" />}
             </button>
           </div>
         </div>

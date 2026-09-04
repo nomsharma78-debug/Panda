@@ -46,7 +46,7 @@ export function MediaUploadModal({
       // Parallel fetch with authorization
       Promise.allSettled([
         fetch('/api/storage', { headers, credentials: 'include' }).then((res) => res.json()),
-        fetch('/api/media/folders', { headers, credentials: 'include' }).then((res) => res.json()),
+        fetch('/api/media/folders?parentId=all', { headers, credentials: 'include' }).then((res) => res.json()),
       ])
         .then(([storageResult, foldersResult]) => {
           if (storageResult.status === 'fulfilled' && storageResult.value?.connections) {
