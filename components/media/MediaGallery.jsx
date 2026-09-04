@@ -208,7 +208,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
 
     const cacheKey = folder ? `media:folder:${folder.id}` : 'media:root';
 
-    // On normal navigation without active search/filter, check cache first for 0ms instant display
+    // True SWR: render instantly from memory cache to avoid loading flash, but ALWAYS silently revalidate in the background
     if (!force && !sync && !search && filter === 'all') {
       const cached = pandaCache.get(cacheKey);
       if (cached) {
@@ -216,7 +216,6 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         setMediaList((prev) => reconcileMediaItems(prev, cached.items || []));
         setLoading(false);
         firstLoadDoneRef.current = true;
-        return;
       }
     }
 
@@ -252,7 +251,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         newItems = data.items || [];
         setMediaList((prev) => reconcileMediaItems(prev, newItems));
         if (filter === 'all' && !search) {
-          pandaCache.set(cacheKey, { items: newItems, folders: newFolders }, 120_000);
+          pandaCache.set(cacheKey, { items: newItems, folders: newFolders }, 60_000);
         }
       }
     } catch (err) {
@@ -271,20 +270,30 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     fetchContent({ folder: currentFolder });
   }, [session?.access_token, currentFolder, activeFilter, searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Silent background revalidation on window focus and interval (0ms interruption, zero page flash)
+  // Silent background revalidation on window focus, tab visibility, and periodic polling (0ms interruption, zero page flash)
   useEffect(() => {
-    const handleFocus = () => {
+    const handleRevalidate = () => {
       fetchContent({ folder: currentFolderRef.current, silent: true });
     };
-    window.addEventListener('focus', handleFocus);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        handleRevalidate();
+      }
+    };
+
+    window.addEventListener('focus', handleRevalidate);
+    document.addEventListener('visibilitychange', handleVisibility);
+
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        fetchContent({ folder: currentFolderRef.current, silent: true });
+        handleRevalidate();
       }
-    }, 20_000);
+    }, 8_000);
 
     return () => {
-      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('focus', handleRevalidate);
+      document.removeEventListener('visibilitychange', handleVisibility);
       clearInterval(interval);
     };
   }, [fetchContent]);
