@@ -217,15 +217,10 @@ export function MediaCard({
         )}
       </div>
 
-      {/* Card Info Footer */}
-      <div className="p-3 bg-slate-900/90 flex flex-col gap-1 border-t border-slate-800">
-        <p className="text-xs font-medium text-slate-200 truncate" title={targetMedia.original_filename}>
-          {targetMedia.original_filename}
-        </p>
-        <div className="flex items-center justify-between text-[11px] text-slate-400">
-          <span>{formatBytes(targetMedia.file_size)}</span>
-          <span>{timeStr}</span>
-        </div>
+      {/* Card Info Footer (Clean metadata without filename below the image) */}
+      <div className="px-3 py-2 bg-slate-900/90 flex items-center justify-between text-[11px] text-slate-400 font-mono border-t border-slate-800/80">
+        <span>{formatBytes(targetMedia.file_size)}</span>
+        <span>{timeStr}</span>
       </div>
     </div>
   );
