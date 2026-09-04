@@ -32,11 +32,29 @@ export function MediaUploadModal({
 
   const [isLoadingStorage, setIsLoadingStorage] = useState(true);
 
+  // Helper to resolve the active folder ID from props, URL, or session storage
+  const resolveTargetFolder = () => {
+    if (initialFolderId && initialFolderId !== 'root') return initialFolderId;
+    if (typeof window !== 'undefined') {
+      try {
+        const urlFolder = new URLSearchParams(window.location.search).get('folder');
+        if (urlFolder) return urlFolder;
+        const stored = window.sessionStorage.getItem('panda_active_folder');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.id) return parsed.id;
+        }
+      } catch {}
+    }
+    return 'root';
+  };
+
   // Fetch available storage connections and folders
   useEffect(() => {
     if (isOpen) {
       setIsLoadingStorage(true);
-      setSelectedFolder(initialFolderId || 'root');
+      const targetFolder = resolveTargetFolder();
+      setSelectedFolder(targetFolder);
 
       const headers = {};
       if (session?.access_token) {
