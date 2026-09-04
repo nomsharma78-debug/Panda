@@ -54,7 +54,8 @@ export function AppLayout({
       if (res.ok) {
         const data = await res.json();
         if (data.combined) {
-          pandaCache.set(METRICS_CACHE_KEY, data.combined, 60_000);
+          pandaCache.set(METRICS_CACHE_KEY, data.combined, 120_000);
+          pandaCache.set('storage:connections', data, 120_000);
           setStorageMetrics(data.combined);
         }
       }
@@ -73,6 +74,7 @@ export function AppLayout({
   useEffect(() => {
     const handleStorageUpdated = () => {
       pandaCache.invalidate(METRICS_CACHE_KEY);
+      pandaCache.invalidate('storage:connections');
       fetchStorageSummary(true);
     };
     window.addEventListener('panda:storage:updated', handleStorageUpdated);

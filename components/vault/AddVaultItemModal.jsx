@@ -233,6 +233,7 @@ export function AddVaultItemModal({
 
       success(`${typeLabel} saved securely in vault.`);
 
+      window.dispatchEvent(new CustomEvent('panda:vault:updated'));
       if (onItemCreated) onItemCreated();
       onClose();
     } catch (err) {

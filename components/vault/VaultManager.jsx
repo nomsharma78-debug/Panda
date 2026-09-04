@@ -21,6 +21,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useAuth } from '@/components/context/AuthContext';
 import { useToast } from '@/components/context/ToastContext';
 import { decryptClientVaultItem } from '@/lib/crypto/client-vault';
+import { pandaCache } from '@/lib/client-cache';
 
 export function VaultManager({ initialType = 'all', onOpenAddModal }) {
   const router = useRouter();
@@ -29,9 +30,13 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
 
   const [activeTab, setActiveTab] = useState(initialType);
   const [searchQuery, setSearchQuery] = useState('');
-  const [items, setItems] = useState([]);
-  const [decryptedMap, setDecryptedMap] = useState({});
-  const [loading, setLoading] = useState(true);
+
+  const cacheKey = activeTab === 'all' ? 'vault:all' : `vault:${activeTab}`;
+  const cached = pandaCache.get(cacheKey);
+
+  const [items, setItems] = useState(cached?.items || []);
+  const [decryptedMap, setDecryptedMap] = useState(cached?.decryptedMap || {});
+  const [loading, setLoading] = useState(!cached);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -51,11 +56,19 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
     }
   };
 
-  const fetchItems = useCallback(async (isSilent = false) => {
-    try {
-      if (!isSilent && !initialLoadedRef.current) {
-        setLoading(true);
+  const fetchItems = useCallback(async (force = false) => {
+    const currentKey = activeTab === 'all' ? 'vault:all' : `vault:${activeTab}`;
+    if (!force) {
+      const cachedData = pandaCache.get(currentKey);
+      if (cachedData) {
+        setItems(cachedData.items || []);
+        setDecryptedMap(cachedData.decryptedMap || {});
+        setLoading(false);
+        return;
       }
+    }
+
+    try {
       const url = activeTab === 'all' ? '/api/vault' : `/api/vault?type=${activeTab}`;
       const headers = {};
       if (session?.access_token) {
@@ -68,7 +81,7 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
         const rawItems = data.items || [];
         setItems(rawItems);
 
-        // Decrypt items in memory
+        // Decrypt items in volatile memory
         const decrypted = {};
         for (const item of rawItems) {
           if (item.decryptedPayload) {
@@ -93,23 +106,26 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
           }
         }
         setDecryptedMap(decrypted);
+
+        // Cache in volatile memory ONLY (never write decrypted secrets to disk/storage)
+        pandaCache.set(currentKey, { items: rawItems, decryptedMap: decrypted }, 120_000, false);
       }
     } catch (err) {
       console.error('Fetch vault items error:', err);
     } finally {
-      initialLoadedRef.current = true;
       setLoading(false);
     }
-  }, [activeTab, clientCryptoKey, session]);
-
-  const initialLoadedRef = React.useRef(false);
+  }, [activeTab, clientCryptoKey, session?.access_token]);
 
   useEffect(() => {
-    fetchItems(initialLoadedRef.current);
+    fetchItems(false);
   }, [fetchItems]);
 
   useEffect(() => {
-    const handleVaultUpdated = () => fetchItems();
+    const handleVaultUpdated = () => {
+      pandaCache.invalidatePrefix('vault:');
+      fetchItems(true);
+    };
     window.addEventListener('panda:vault:updated', handleVaultUpdated);
     return () => window.removeEventListener('panda:vault:updated', handleVaultUpdated);
   }, [fetchItems]);

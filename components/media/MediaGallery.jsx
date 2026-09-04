@@ -36,7 +36,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { StorageHowItWorksModal } from '@/components/storage/StorageHowItWorksModal';
 import { useToast } from '@/components/context/ToastContext';
 import { useAuth } from '@/components/context/AuthContext';
-import { pandaCache } from '@/lib/client-cache';
+import { pandaCache, mediaBlobCache } from '@/lib/client-cache';
 
 export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   const { session } = useAuth();
@@ -92,7 +92,10 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       if (res.ok) {
         const data = await res.json();
         const hasActiveConns = Array.isArray(data.connections) && data.connections.length > 0;
-        pandaCache.set('storage:connections', data, 60_000);
+        pandaCache.set('storage:connections', data, 120_000);
+        if (data.combined) {
+          pandaCache.set('storage:metrics', data.combined, 120_000);
+        }
         setHasStorage(hasActiveConns);
       }
     } catch {}
@@ -113,9 +116,23 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     }
   }, []);
 
-  // Fast fetch: only media + folders
+  // Fast fetch: only media + folders with smart SWR caching
   const fetchContent = useCallback(async (opts = {}) => {
-    const { folder = currentFolder, filter = activeFilter, search = searchQuery, sync = false } = opts;
+    const { folder = currentFolder, filter = activeFilter, search = searchQuery, sync = false, force = false } = opts;
+
+    const cacheKey = folder ? `media:folder:${folder.id}` : 'media:root';
+
+    // On normal navigation without active search/filter, check cache first for 0ms instant display
+    if (!force && !sync && !search && filter === 'all') {
+      const cached = pandaCache.get(cacheKey);
+      if (cached) {
+        setFolders(cached.folders || []);
+        setMediaList(cached.items || []);
+        setLoading(false);
+        firstLoadDoneRef.current = true;
+        return;
+      }
+    }
 
     try {
       const params = new URLSearchParams();
@@ -155,8 +172,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
           return prev.length > 0 ? prev : newItems;
         });
         if (filter === 'all' && !search && newItems.length > 0) {
-          const key = folder ? `media:folder:${folder.id}` : 'media:root';
-          pandaCache.set(key, { items: newItems, folders: newFolders }, 45_000);
+          pandaCache.set(cacheKey, { items: newItems, folders: newFolders }, 120_000);
         }
       }
     } catch (err) {
@@ -271,11 +287,13 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   const executeDelete = async () => {
     setIsDeleting(true);
     try {
+      pandaCache.invalidatePrefix('media:');
       if (deleteTarget === 'bulk') {
         const ids = Array.from(selectedIds);
         // Optimistically remove from UI immediately
         setMediaList((prev) => prev.filter((m) => !ids.includes(m.id)));
         for (const id of ids) {
+          mediaBlobCache.delete(id);
           await fetch(`/api/media/${id}`, { method: 'DELETE', headers: getHeaders(), credentials: 'include' });
         }
         success(`Deleted ${ids.length} files successfully.`);
@@ -283,17 +301,18 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         setIsSelectionMode(false);
       } else if (deleteTarget?.id) {
         // Optimistically remove from UI immediately
+        mediaBlobCache.delete(deleteTarget.id);
         setMediaList((prev) => prev.filter((m) => m.id !== deleteTarget.id));
         const res = await fetch(`/api/media/${deleteTarget.id}`, { method: 'DELETE', headers: getHeaders(), credentials: 'include' });
         if (res.ok) {
           success(`Deleted "${deleteTarget.original_filename}"`);
         } else {
           toastError('Failed to delete file');
-          fetchContent({ silent: true }); // Restore list on failure
+          fetchContent({ force: true }); // Restore list on failure
         }
       }
       setDeleteTarget(null);
-      fetchContent({ silent: true });
+      fetchContent({ force: true });
     } catch {
       toastError('Network error deleting files');
     } finally {
@@ -304,6 +323,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   const executeDeleteFolder = async () => {
     if (!deleteFolderTarget) return;
     setIsDeleting(true);
+    pandaCache.invalidatePrefix('media:');
     // Optimistically remove folder from list
     setFolders((prev) => prev.filter((f) => f.id !== deleteFolderTarget.id));
     try {
@@ -313,10 +333,10 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         if (currentFolder?.id === deleteFolderTarget.id) {
           setCurrentFolder(null);
         }
-        fetchContent({ silent: true });
+        fetchContent({ force: true });
       } else {
         toastError('Failed to delete folder');
-        fetchContent({ silent: true }); // Restore on failure
+        fetchContent({ force: true }); // Restore on failure
       }
     } catch {
       toastError('Network error deleting folder');

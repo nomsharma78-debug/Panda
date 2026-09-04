@@ -443,29 +443,29 @@ export function VideoPlayer({
       {/* Buffering Spinner */}
       {isBuffering && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30 z-20">
-          <div className="w-14 h-14 rounded-full border-4 border-red-500/30 border-t-red-500 animate-spin" />
+          <div className="w-14 h-14 rounded-full border-4 border-teal-500/30 border-t-teal-400 animate-spin" />
         </div>
       )}
 
-      {/* YouTube Double Tap Left Ripple (-10s) */}
+      {/* Double Tap Left Ripple (-10s) */}
       {leftSkipRipple && (
-        <div className="absolute left-0 inset-y-0 w-1/3 bg-white/10 rounded-r-full flex flex-col items-center justify-center pointer-events-none z-20 transition-all">
-          <div className="flex items-center text-white -space-x-2 mb-1">
+        <div className="absolute left-0 inset-y-0 w-1/3 bg-teal-500/10 rounded-r-full flex flex-col items-center justify-center pointer-events-none z-20 transition-all">
+          <div className="flex items-center text-teal-300 -space-x-2 mb-1">
             <ChevronsLeft className="w-8 h-8 animate-pulse" />
           </div>
-          <span className="text-xs font-bold text-white font-mono bg-black/70 px-2.5 py-0.5 rounded-full shadow-lg">
+          <span className="text-xs font-bold text-white font-mono bg-black/80 border border-teal-500/30 px-2.5 py-0.5 rounded-full shadow-lg">
             10 seconds
           </span>
         </div>
       )}
 
-      {/* YouTube Double Tap Right Ripple (+10s) */}
+      {/* Double Tap Right Ripple (+10s) */}
       {rightSkipRipple && (
-        <div className="absolute right-0 inset-y-0 w-1/3 bg-white/10 rounded-l-full flex flex-col items-center justify-center pointer-events-none z-20 transition-all">
-          <div className="flex items-center text-white -space-x-2 mb-1">
+        <div className="absolute right-0 inset-y-0 w-1/3 bg-teal-500/10 rounded-l-full flex flex-col items-center justify-center pointer-events-none z-20 transition-all">
+          <div className="flex items-center text-teal-300 -space-x-2 mb-1">
             <ChevronsRight className="w-8 h-8 animate-pulse" />
           </div>
-          <span className="text-xs font-bold text-white font-mono bg-black/70 px-2.5 py-0.5 rounded-full shadow-lg">
+          <span className="text-xs font-bold text-white font-mono bg-black/80 border border-teal-500/30 px-2.5 py-0.5 rounded-full shadow-lg">
             10 seconds
           </span>
         </div>
@@ -473,23 +473,23 @@ export function VideoPlayer({
 
       {/* Center Play/Pause Pop Action Feedback */}
       {centerAction && (
-        <div className="absolute inset-0 m-auto w-20 h-20 rounded-full bg-black/70 backdrop-blur-sm text-white flex items-center justify-center pointer-events-none z-20 animate-ping opacity-90">
+        <div className="absolute inset-0 m-auto w-20 h-20 rounded-full bg-slate-950/80 border border-teal-500/40 backdrop-blur-sm text-teal-300 flex items-center justify-center pointer-events-none z-20 animate-ping opacity-90 shadow-[0_0_20px_rgba(45,212,191,0.5)]">
           {centerAction === 'play' ? (
-            <Play className="w-10 h-10 fill-white ml-1" />
+            <Play className="w-10 h-10 fill-teal-400 ml-1 text-teal-400" />
           ) : (
-            <Pause className="w-10 h-10 fill-white" />
+            <Pause className="w-10 h-10 fill-teal-400 text-teal-400" />
           )}
         </div>
       )}
 
-      {/* YouTube Controls Gradient Overlay */}
+      {/* Video Controls Gradient Overlay */}
       <div
         onClick={(e) => e.stopPropagation()}
         className={`absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent pt-10 pb-3 px-4 transition-opacity duration-200 z-20 ${
           showControls || !isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
-        {/* YouTube Scrubber Progress Bar */}
+        {/* Scrubber Progress Bar */}
         <div
           ref={progressBarRef}
           className="relative group/scrubber w-full h-4 flex items-end mb-2 cursor-pointer"
@@ -500,7 +500,7 @@ export function VideoPlayer({
           {/* Hover Time Bubble Tooltip */}
           {hoverTime !== null && (
             <div
-              className="absolute -top-7 transform -translate-x-1/2 px-2 py-0.5 rounded bg-black/90 text-[11px] font-mono font-semibold text-white pointer-events-none border border-white/10 shadow-lg"
+              className="absolute -top-7 transform -translate-x-1/2 px-2 py-0.5 rounded bg-slate-900 text-[11px] font-mono font-semibold text-teal-300 pointer-events-none border border-teal-500/40 shadow-[0_2px_10px_rgba(0,0,0,0.8)]"
               style={{ left: `${hoverPos}%` }}
             >
               {formatTime(hoverTime)}
@@ -515,28 +515,28 @@ export function VideoPlayer({
               style={{ width: `${bufferPercent}%` }}
             />
 
-            {/* Played Progress Bar (YouTube Red/Teal) */}
+            {/* Played Progress Bar (Panda Teal) */}
             <div
-              className="absolute left-0 top-0 bottom-0 bg-red-600 rounded-full"
+              className="absolute left-0 top-0 bottom-0 bg-teal-400 rounded-full shadow-[0_0_8px_rgba(45,212,191,0.6)]"
               style={{ width: `${progressPercent}%` }}
             />
 
             {/* Scrubber Dot Handle */}
             <div
-              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-red-600 shadow-md scale-0 group-hover/scrubber:scale-100 transition-transform duration-150"
+              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-teal-400 shadow-[0_0_10px_rgba(45,212,191,0.9)] scale-0 group-hover/scrubber:scale-100 transition-transform duration-150"
               style={{ left: `${progressPercent}%` }}
             />
           </div>
         </div>
 
-        {/* YouTube Controls Row */}
+        {/* Video Controls Row */}
         <div className="flex items-center justify-between text-white text-xs">
           {/* Left Buttons: Play, Next/Skip, Volume, Time */}
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Play/Pause Button */}
             <button
               onClick={togglePlay}
-              className="p-1 text-white hover:text-red-500 transition-colors focus:outline-none"
+              className="p-1 text-white hover:text-teal-300 transition-colors focus:outline-none"
               aria-label={isPlaying ? 'Pause (k)' : 'Play (k)'}
               title={isPlaying ? 'Pause (k)' : 'Play (k)'}
             >
@@ -550,7 +550,7 @@ export function VideoPlayer({
             {/* Skip -10s Button */}
             <button
               onClick={() => seekBy(-10)}
-              className="p-1 text-slate-300 hover:text-white transition-colors"
+              className="p-1 text-slate-300 hover:text-teal-300 transition-colors"
               title="Rewind 10 seconds (j)"
             >
               <RotateCcw className="w-4 h-4" />
@@ -559,7 +559,7 @@ export function VideoPlayer({
             {/* Skip +10s Button */}
             <button
               onClick={() => seekBy(10)}
-              className="p-1 text-slate-300 hover:text-white transition-colors"
+              className="p-1 text-slate-300 hover:text-teal-300 transition-colors"
               title="Fast forward 10 seconds (l)"
             >
               <RotateCw className="w-4 h-4" />
@@ -569,12 +569,12 @@ export function VideoPlayer({
             <div className="flex items-center group/vol">
               <button
                 onClick={toggleMute}
-                className="p-1 text-white hover:text-red-500 transition-colors focus:outline-none"
+                className="p-1 text-white hover:text-teal-300 transition-colors focus:outline-none"
                 aria-label={isMuted ? 'Unmute (m)' : 'Mute (m)'}
                 title={isMuted ? 'Unmute (m)' : 'Mute (m)'}
               >
                 {isMuted || volume === 0 ? (
-                  <VolumeX className="w-5 h-5 text-red-500" />
+                  <VolumeX className="w-5 h-5 text-rose-400" />
                 ) : volume < 0.5 ? (
                   <Volume1 className="w-5 h-5" />
                 ) : (
@@ -588,13 +588,13 @@ export function VideoPlayer({
                 step="0.05"
                 value={isMuted ? 0 : volume}
                 onChange={handleVolumeChange}
-                className="w-0 group-hover/vol:w-16 focus:w-16 transition-all duration-200 h-1 bg-white/30 rounded-lg appearance-none cursor-pointer accent-red-600 ml-1.5 opacity-0 group-hover/vol:opacity-100 focus:opacity-100"
+                className="w-0 group-hover/vol:w-16 focus:w-16 transition-all duration-200 h-1 bg-white/30 rounded-lg appearance-none cursor-pointer accent-teal-400 ml-1.5 opacity-0 group-hover/vol:opacity-100 focus:opacity-100"
               />
             </div>
 
             {/* Current Time / Total Duration */}
             <div className="text-[12px] font-mono text-slate-300 ml-1 select-none">
-              <span>{formatTime(currentTime)}</span>
+              <span className="text-teal-300 font-semibold">{formatTime(currentTime)}</span>
               <span className="mx-1 text-slate-500">/</span>
               <span>{formatTime(duration)}</span>
             </div>
@@ -606,7 +606,7 @@ export function VideoPlayer({
             <button
               onClick={toggleLoop}
               className={`p-1.5 rounded-lg transition-colors ${
-                isLooping ? 'text-red-500' : 'text-slate-300 hover:text-white'
+                isLooping ? 'text-teal-400 bg-teal-500/20' : 'text-slate-300 hover:text-white'
               }`}
               title={isLooping ? 'Loop is ON' : 'Loop is OFF'}
             >
@@ -630,18 +630,18 @@ export function VideoPlayer({
                   setSettingsSubmenu(null);
                 }}
                 className={`p-1.5 rounded-lg transition-transform duration-200 ${
-                  showSettings ? 'text-red-500 rotate-45' : 'text-slate-300 hover:text-white'
+                  showSettings ? 'text-teal-400 rotate-45' : 'text-slate-300 hover:text-white'
                 }`}
                 title="Settings"
               >
                 <Settings className="w-4 h-4" />
               </button>
 
-              {/* YouTube Settings Pop-up Menu */}
+              {/* Settings Pop-up Menu */}
               {showSettings && (
                 <div className="absolute bottom-full right-0 mb-3 w-52 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-2xl shadow-2xl p-2 z-40 text-xs animate-slide-up">
                   {settingsSubmenu === 'speed' ? (
-                    <div>
+                     <div>
                       <div
                         onClick={() => setSettingsSubmenu(null)}
                         className="flex items-center gap-2 p-2 text-slate-400 hover:text-white cursor-pointer border-b border-slate-800 mb-1"
@@ -656,12 +656,12 @@ export function VideoPlayer({
                             onClick={() => changePlaybackRate(rate)}
                             className={`flex items-center justify-between px-3 py-1.5 rounded-lg cursor-pointer transition-colors ${
                               playbackRate === rate
-                                ? 'bg-red-600/20 text-red-400 font-semibold'
+                                ? 'bg-teal-500/20 text-teal-300 font-semibold border border-teal-500/30'
                                 : 'text-slate-300 hover:bg-white/10 hover:text-white'
                             }`}
                           >
                             <span>{rate === 1 ? 'Normal' : `${rate}x`}</span>
-                            {playbackRate === rate && <Check className="w-3.5 h-3.5" />}
+                            {playbackRate === rate && <Check className="w-3.5 h-3.5 text-teal-400" />}
                           </div>
                         ))}
                       </div>
@@ -674,7 +674,7 @@ export function VideoPlayer({
                         className="flex items-center justify-between p-2 rounded-xl text-slate-200 hover:bg-white/10 cursor-pointer transition-colors"
                       >
                         <span>Playback speed</span>
-                        <div className="flex items-center gap-1 text-slate-400 font-mono">
+                        <div className="flex items-center gap-1 text-teal-300 font-mono">
                           <span>{playbackRate === 1 ? 'Normal' : `${playbackRate}x`}</span>
                           <ChevronRight className="w-3.5 h-3.5" />
                         </div>
@@ -686,7 +686,7 @@ export function VideoPlayer({
                         className="flex items-center justify-between p-2 rounded-xl text-slate-200 hover:bg-white/10 cursor-pointer transition-colors"
                       >
                         <span>Loop</span>
-                        <span className="font-mono text-slate-400">{isLooping ? 'On' : 'Off'}</span>
+                        <span className="font-mono text-teal-300">{isLooping ? 'On' : 'Off'}</span>
                       </div>
                     </div>
                   )}
@@ -697,7 +697,7 @@ export function VideoPlayer({
             {/* Fullscreen Toggle */}
             <button
               onClick={toggleFullscreen}
-              className="p-1 text-white hover:text-red-500 transition-colors focus:outline-none"
+              className="p-1 text-white hover:text-teal-300 transition-colors focus:outline-none"
               aria-label={isFullscreen ? 'Exit full screen (f)' : 'Full screen (f)'}
               title={isFullscreen ? 'Exit full screen (f)' : 'Full screen (f)'}
             >

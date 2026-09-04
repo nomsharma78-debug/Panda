@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { deriveClientKey } from '@/lib/crypto/client-vault';
+import { pandaCache, mediaBlobCache } from '@/lib/client-cache';
 
 const DEFAULT_INACTIVITY_MINUTES = 15;
 const INACTIVITY_STORAGE_KEY = 'panda_inactivity_minutes';
@@ -123,6 +124,15 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
+
+  // Synchronize active user ID to cache for strict security and cross-account isolation
+  useEffect(() => {
+    if (user?.id) {
+      pandaCache.setUser(user.id);
+    } else if (!loading && !user) {
+      pandaCache.setUser(null);
+    }
+  }, [user?.id, loading]);
 
   /**
    * Live Session Presence & Revocation Watchdog
@@ -391,6 +401,8 @@ export function AuthProvider({ children }) {
    */
   const logout = async (dueToInactivity = false) => {
     purgeLocalAuthStorage();
+    pandaCache.clear();
+    mediaBlobCache.clear();
 
     try {
       await fetch('/api/auth/logout', {
@@ -402,6 +414,7 @@ export function AuthProvider({ children }) {
     setUser(null);
     setSession(null);
     setClientCryptoKey(null);
+    pandaCache.setUser(null);
 
     if (dueToInactivity) {
       router.push('/login?reason=inactivity');

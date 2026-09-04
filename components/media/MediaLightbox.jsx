@@ -52,6 +52,30 @@ export function MediaLightbox({
 
   const currentItem = mediaList[internalIndex] || null;
 
+  const targetMedia = currentItem || {};
+  const rawFilename = targetMedia.original_filename || targetMedia.filename || targetMedia.name || targetMedia.object_key || '';
+  const filename = rawFilename.toLowerCase();
+  const mime = (targetMedia.mime_type || targetMedia.content_type || '').toLowerCase();
+  const type = (targetMedia.media_type || '').toLowerCase();
+
+  const isVideo =
+    type === 'video' ||
+    mime.startsWith('video/') ||
+    Boolean(filename.match(/\.(mp4|webm|mov|mkv|avi|m4v|3gp|flv|wmv)(\.enc)?$/i));
+
+  const isPdf =
+    type === 'pdf' ||
+    mime === 'application/pdf' ||
+    Boolean(filename.match(/\.pdf(\.enc)?$/i));
+
+  const isPhoto =
+    !isVideo &&
+    !isPdf &&
+    (type === 'photo' ||
+      type === 'image' ||
+      mime.startsWith('image/') ||
+      Boolean(filename.match(/\.(jpg|jpeg|png|webp|gif|svg|bmp|heic|avif|ico|tiff)(\.enc)?$/i)));
+
   // Reset zoom when item changes
   useEffect(() => {
     setZoom(1);
@@ -60,7 +84,7 @@ export function MediaLightbox({
 
   // Fetch image as blob when item changes
   useEffect(() => {
-    if (!isOpen || !currentItem || currentItem.media_type !== 'photo') {
+    if (!isOpen || !currentItem || !isPhoto) {
       setPhotoBlobUrl(null);
       setPhotoLoading(false);
       setPhotoError(false);
@@ -110,7 +134,7 @@ export function MediaLightbox({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, currentItem?.id, session?.access_token]);
+  }, [isOpen, currentItem?.id, isPhoto, session?.access_token]);
 
   // Revoke blob on unmount or close
   useEffect(() => {
@@ -172,7 +196,7 @@ export function MediaLightbox({
 
         <div className="flex items-center gap-2">
           {/* Zoom controls for photos */}
-          {currentItem.media_type === 'photo' && (
+          {isPhoto && (
             <div className="flex items-center gap-1 bg-slate-900/80 rounded-xl p-1 border border-slate-800 mr-2">
               <button
                 onClick={() => setZoom((z) => Math.min(3, z + 0.25))}
@@ -256,7 +280,7 @@ export function MediaLightbox({
 
         {/* Content Viewer */}
         <div className="max-w-5xl max-h-[80vh] flex items-center justify-center overflow-auto">
-          {currentItem.media_type === 'photo' && (
+          {isPhoto && (
             <>
               {photoLoading && (
                 <div className="flex flex-col items-center gap-3">
@@ -281,11 +305,11 @@ export function MediaLightbox({
             </>
           )}
 
-          {currentItem.media_type === 'video' && (
+          {isVideo && (
             <VideoPlayer src={videoUrl} mimeType={currentItem.mime_type} autoPlay />
           )}
 
-          {(currentItem.media_type === 'pdf' || currentItem.media_type === 'document') && (
+          {(isPdf || currentItem.media_type === 'document') && (
             <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl p-8 flex flex-col items-center text-center shadow-2xl">
               <div className="w-16 h-16 rounded-2xl bg-teal-500/10 border border-teal-500/30 text-teal-400 flex items-center justify-center mb-4">
                 <FileText className="w-8 h-8" />

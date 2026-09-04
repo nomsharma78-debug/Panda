@@ -28,7 +28,7 @@ import { useAuth } from '@/components/context/AuthContext';
 import { pandaCache } from '@/lib/client-cache';
 
 const CACHE_KEY = 'storage:connections';
-const CACHE_TTL = 60_000; // 60 seconds
+const CACHE_TTL = 120_000; // 2 minutes
 
 export function StorageManager({ onOpenAddModal }) {
   const { session } = useAuth();
@@ -45,6 +45,16 @@ export function StorageManager({ onOpenAddModal }) {
   const [disconnectTarget, setDisconnectTarget] = useState(null);
 
   const fetchStorageData = useCallback(async (force = false) => {
+    if (!force) {
+      const cachedData = pandaCache.get(CACHE_KEY);
+      if (cachedData) {
+        setConnections(cachedData.connections || []);
+        setCombinedMetrics(cachedData.combined || null);
+        setLoading(false);
+        return;
+      }
+    }
+
     const headers = { 'Cache-Control': 'no-cache' };
     if (session?.access_token) {
       headers['Authorization'] = `Bearer ${session.access_token}`;
@@ -54,6 +64,9 @@ export function StorageManager({ onOpenAddModal }) {
       if (res.ok) {
         const data = await res.json();
         pandaCache.set(CACHE_KEY, data, CACHE_TTL);
+        if (data.combined) {
+          pandaCache.set('storage:metrics', data.combined, CACHE_TTL);
+        }
         setConnections(data.connections || []);
         setCombinedMetrics(data.combined || null);
       }
@@ -65,13 +78,14 @@ export function StorageManager({ onOpenAddModal }) {
   }, [session?.access_token]);
 
   useEffect(() => {
-    fetchStorageData(true);
+    fetchStorageData(false);
   }, [session?.access_token, fetchStorageData]);
 
   // Listen to global updates — invalidate cache and refetch
   useEffect(() => {
     const handleUpdated = () => {
       pandaCache.invalidate(CACHE_KEY);
+      pandaCache.invalidate('storage:metrics');
       fetchStorageData(true);
     };
     window.addEventListener('panda:storage:updated', handleUpdated);
