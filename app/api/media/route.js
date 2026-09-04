@@ -12,13 +12,8 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const mediaType = searchParams.get('type') || 'all';
   const search = searchParams.get('search') || '';
-  const folderIdParam = searchParams.get('folderId');
   const limit = parseInt(searchParams.get('limit') || '500', 10);
   const offset = parseInt(searchParams.get('offset') || '0', 10);
-  let folderId = undefined;
-  if (folderIdParam === 'root' || folderIdParam === 'null' || !folderIdParam) folderId = null;
-  else if (folderIdParam === 'all') folderId = undefined;
-  else if (folderIdParam) folderId = folderIdParam;
 
   const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
 
@@ -37,7 +32,6 @@ export async function GET(request) {
     const items = await listUserMedia(authData.user.id, {
       token,
       mediaType,
-      folderId,
       search,
       limit,
       offset,

@@ -12,34 +12,24 @@ import {
   CheckSquare,
   Download,
   Trash2,
-  Filter,
   RefreshCw,
-  HardDrive,
   HelpCircle,
   ShieldCheck,
   Plus,
-  ArrowRight,
   Cloud,
-  FolderPlus,
-  Folder,
-  ChevronRight,
-  ArrowLeft,
-  Home,
   Palette,
 } from 'lucide-react';
 import { MediaCard } from './MediaCard';
 import { MediaLightbox } from './MediaLightbox';
-import { FolderCard } from './FolderCard';
-import { CreateFolderModal } from './CreateFolderModal';
 import { MediaGridSkeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { StorageHowItWorksModal } from '@/components/storage/StorageHowItWorksModal';
 import { useToast } from '@/components/context/ToastContext';
 import { useAuth } from '@/components/context/AuthContext';
-import { pandaCache, mediaBlobCache } from '@/lib/client-cache';
+import { pandaCache } from '@/lib/client-cache';
 
-// Granular list reconciliation helpers to preserve object identities and prevent redundant re-renders
+// Granular list reconciliation helper to preserve object identities and prevent redundant re-renders
 function reconcileMediaItems(prevList, incomingList) {
   if (!prevList || prevList.length === 0) return incomingList || [];
   if (!incomingList || incomingList.length === 0) return [];
@@ -79,79 +69,19 @@ function reconcileMediaItems(prevList, incomingList) {
   });
 }
 
-function reconcileFolders(prevFolders, incomingFolders) {
-  if (!prevFolders || prevFolders.length === 0) return incomingFolders || [];
-  if (!incomingFolders || incomingFolders.length === 0) return [];
-
-  const prevMap = new Map(prevFolders.map((f) => [f.id, f]));
-
-  if (prevFolders.length === incomingFolders.length) {
-    let same = true;
-    for (let i = 0; i < prevFolders.length; i++) {
-      const p = prevFolders[i];
-      const inc = incomingFolders[i];
-      if (
-        !inc ||
-        p.id !== inc.id ||
-        p.name !== inc.name ||
-        p.file_count !== inc.file_count ||
-        p.total_bytes !== inc.total_bytes ||
-        p.color !== inc.color
-      ) {
-        same = false;
-        break;
-      }
-    }
-    if (same) return prevFolders;
-  }
-
-  return incomingFolders.map((inc) => {
-    const existing = prevMap.get(inc.id);
-    if (
-      existing &&
-      existing.name === inc.name &&
-      existing.file_count === inc.file_count &&
-      existing.total_bytes === inc.total_bytes &&
-      existing.color === inc.color
-    ) {
-      return existing;
-    }
-    return inc;
-  });
-}
-
-// Helper to restore active folder from URL or sessionStorage on mount/reload
-function getInitialFolderFromUrl() {
-  if (typeof window === 'undefined') return null;
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const folderId = params.get('folder');
-    if (folderId) {
-      const stored = window.sessionStorage.getItem('panda_active_folder');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed && parsed.id === folderId) {
-          return parsed;
-        }
-      }
-      return { id: folderId, name: 'Folder' };
-    }
-  } catch {}
-  return null;
-}
-
 export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   const { session } = useAuth();
   const { success, error: toastError } = useToast();
 
-  const [currentFolder, setCurrentFolder] = useState(() => getInitialFolderFromUrl());
-  const initialKey = currentFolder ? `media:folder:${currentFolder.id}` : 'media:root';
-  const cachedInitial = pandaCache.get(initialKey);
+  const cachedInitial = pandaCache.get('media:list');
 
-  const [mediaList, setMediaList] = useState(cachedInitial?.items || []);
-  const [folders, setFolders] = useState(cachedInitial?.folders || []);
-  const [hasStorage, setHasStorage] = useState(pandaCache.get('storage:connections') ? (pandaCache.get('storage:connections')?.connections || []).length > 0 : true);
-  // Only show skeleton on very first load (no cache at all)
+  const [mediaList, setMediaList] = useState(cachedInitial || []);
+  const [hasStorage, setHasStorage] = useState(
+    pandaCache.get('storage:connections')
+      ? (pandaCache.get('storage:connections')?.connections || []).length > 0
+      : true
+  );
+  // Only show skeleton on very first load if no cached data exists
   const [loading, setLoading] = useState(!cachedInitial);
   const [activeFilter, setActiveFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -159,17 +89,13 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   // Modals state
-  const [createFolderOpen, setCreateFolderOpen] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [howItWorksOpen, setHowItWorksOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleteFolderTarget, setDeleteFolderTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const abortRef = React.useRef(null);
-  const mountedRef = React.useRef(true);
-  const firstLoadDoneRef = React.useRef(!!cachedInitial); // skip full skeleton if cached
+  const firstLoadDoneRef = React.useRef(!!cachedInitial);
 
   // Auth headers helper
   const getHeaders = useCallback(() => {
@@ -178,7 +104,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     return h;
   }, [session?.access_token]);
 
-  // Check storage from backend API (reusing cache when navigating)
+  // Check storage from backend API (reusing cache)
   const checkStorage = useCallback(async (force = false) => {
     if (!force) {
       const cached = pandaCache.get('storage:connections');
@@ -204,121 +130,64 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     } catch {}
   }, [session?.access_token]);
 
-  const currentFolderRef = React.useRef(currentFolder);
-  currentFolderRef.current = currentFolder;
+  // Fast fetch media with smart SWR caching
+  const fetchContent = useCallback(
+    async (opts = {}) => {
+      const { filter = activeFilter, search = searchQuery, sync = false, force = false, silent = false } = opts;
 
-  const handleNavigateFolder = useCallback((folder) => {
-    setCurrentFolder(folder);
-    currentFolderRef.current = folder;
-    if (typeof window !== 'undefined') {
-      try {
-        const url = new URL(window.location.href);
-        if (folder) {
-          url.searchParams.set('folder', folder.id);
-          window.history.replaceState({}, '', url.toString());
-          window.sessionStorage.setItem('panda_active_folder', JSON.stringify(folder));
-        } else {
-          url.searchParams.delete('folder');
-          window.history.replaceState({}, '', url.toString());
-          window.sessionStorage.removeItem('panda_active_folder');
+      // Render instantly from memory cache to avoid loading flash
+      if (!force && !sync && !search && filter === 'all') {
+        const cached = pandaCache.get('media:list');
+        if (cached) {
+          setMediaList((prev) => reconcileMediaItems(prev, cached));
+          setLoading(false);
+          firstLoadDoneRef.current = true;
         }
-      } catch {}
-    }
-    const key = folder ? `media:folder:${folder.id}` : 'media:root';
-    const cached = pandaCache.get(key);
-    if (cached) {
-      setFolders((prev) => reconcileFolders(prev, cached.folders || []));
-      setMediaList((prev) => reconcileMediaItems(prev, cached.items || []));
-      setLoading(false);
-    } else {
-      setMediaList([]);
-      setLoading(true);
-    }
-  }, []);
-
-  // Fast fetch: only media + folders with smart SWR caching
-  const fetchContent = useCallback(async (opts = {}) => {
-    const { folder = currentFolderRef.current, filter = activeFilter, search = searchQuery, sync = false, force = false, silent = false } = opts;
-
-    const cacheKey = folder ? `media:folder:${folder.id}` : 'media:root';
-
-    // True SWR: render instantly from memory cache to avoid loading flash, but ALWAYS silently revalidate in the background
-    if (!force && !sync && !search && filter === 'all') {
-      const cached = pandaCache.get(cacheKey);
-      if (cached) {
-        setFolders((prev) => reconcileFolders(prev, cached.folders || []));
-        setMediaList((prev) => reconcileMediaItems(prev, cached.items || []));
-        setLoading(false);
-        firstLoadDoneRef.current = true;
       }
-    }
 
-    try {
-      const params = new URLSearchParams();
-      if (filter !== 'all') params.set('type', filter);
-      if (search) params.set('search', search);
-      params.set('folderId', folder ? folder.id : 'root');
-      if (sync) params.set('sync', 'true');
-      if (session?.access_token) params.set('token', session.access_token);
+      try {
+        const params = new URLSearchParams();
+        if (filter !== 'all') params.set('type', filter);
+        if (search) params.set('search', search);
+        if (sync) params.set('sync', 'true');
+        if (session?.access_token) params.set('token', session.access_token);
 
-      const foldersUrl = `/api/media/folders?parentId=all`;
-      const mediaUrl = `/api/media?${params.toString()}`;
-      const headers = { 'Cache-Control': 'no-cache' };
-      if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+        const mediaUrl = `/api/media?${params.toString()}`;
+        const headers = { 'Cache-Control': 'no-cache' };
+        if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
 
-      const [foldersRes, mediaRes] = await Promise.all([
-        fetch(foldersUrl, { headers, credentials: 'include' }),
-        fetch(mediaUrl, { headers, credentials: 'include' }),
-      ]);
+        const mediaRes = await fetch(mediaUrl, { headers, credentials: 'include' });
 
-      let newFolders = [];
-      let newItems = [];
-
-      if (foldersRes.ok) {
-        const data = await foldersRes.json();
-        newFolders = data.folders || [];
-        setFolders((prev) => reconcileFolders(prev, newFolders));
-
-        if (currentFolderRef.current) {
-          const match = newFolders.find((f) => f.id === currentFolderRef.current.id);
-          if (match && (match.name !== currentFolderRef.current.name || currentFolderRef.current.name === 'Folder')) {
-            setCurrentFolder(match);
-            currentFolderRef.current = match;
-            try {
-              window.sessionStorage.setItem('panda_active_folder', JSON.stringify(match));
-            } catch {}
+        if (mediaRes.ok) {
+          const data = await mediaRes.json();
+          const newItems = data.items || [];
+          setMediaList((prev) => reconcileMediaItems(prev, newItems));
+          if (filter === 'all' && !search) {
+            pandaCache.set('media:list', newItems, 60_000);
           }
         }
-      }
-
-      if (mediaRes.ok) {
-        const data = await mediaRes.json();
-        newItems = data.items || [];
-        setMediaList((prev) => reconcileMediaItems(prev, newItems));
-        if (filter === 'all' && !search) {
-          pandaCache.set(cacheKey, { items: newItems, folders: newFolders }, 60_000);
+      } catch (err) {
+        console.error('[MediaGallery] Fetch content error:', err);
+      } finally {
+        firstLoadDoneRef.current = true;
+        if (!silent) {
+          setLoading(false);
         }
       }
-    } catch (err) {
-      console.error('[MediaGallery] Fetch content error:', err);
-    } finally {
-      firstLoadDoneRef.current = true;
-      if (!silent) {
-        setLoading(false);
-      }
-    }
-  }, [activeFilter, searchQuery, session?.access_token]);
+    },
+    [activeFilter, searchQuery, session?.access_token]
+  );
 
-  // Load content on mount and whenever auth token, folder, filter, or search changes
+  // Load content on mount and whenever auth token, filter, or search changes
   useEffect(() => {
     checkStorage(false);
-    fetchContent({ folder: currentFolder });
-  }, [session?.access_token, currentFolder, activeFilter, searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+    fetchContent();
+  }, [session?.access_token, activeFilter, searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Silent background revalidation on window focus, tab visibility, and periodic polling (0ms interruption, zero page flash)
+  // Silent background revalidation on window focus and tab visibility (0ms interruption, zero flicker)
   useEffect(() => {
     const handleRevalidate = () => {
-      fetchContent({ folder: currentFolderRef.current, silent: true });
+      fetchContent({ silent: true });
     };
 
     const handleVisibility = () => {
@@ -327,14 +196,6 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       }
     };
 
-    const handlePopState = () => {
-      const restored = getInitialFolderFromUrl();
-      setCurrentFolder(restored);
-      currentFolderRef.current = restored;
-      fetchContent({ folder: restored });
-    };
-
-    window.addEventListener('popstate', handlePopState);
     window.addEventListener('focus', handleRevalidate);
     document.addEventListener('visibilitychange', handleVisibility);
 
@@ -342,10 +203,9 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       if (document.visibilityState === 'visible') {
         handleRevalidate();
       }
-    }, 8_000);
+    }, 10_000);
 
     return () => {
-      window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('focus', handleRevalidate);
       document.removeEventListener('visibilitychange', handleVisibility);
       clearInterval(interval);
@@ -355,45 +215,16 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   // Listen to global upload/storage events
   useEffect(() => {
     const handleMediaUploaded = (e) => {
-      const activeFolder = currentFolderRef.current;
-      const currentTargetFolder = activeFolder?.id || null;
       if (e?.detail?.newItems && Array.isArray(e.detail.newItems) && e.detail.newItems.length > 0) {
         const newItems = e.detail.newItems;
-        const matching = newItems.filter(m => (m.folder_id || null) === currentTargetFolder);
-        if (matching.length > 0) {
-          setMediaList((prev) => {
-            const existingIds = new Set(prev.map((m) => m.id));
-            const toAdd = matching.filter((m) => !existingIds.has(m.id));
-            return [...toAdd, ...prev];
-          });
-        }
-
-        // Optimistically update folder item count and size
-        const folderIdCounts = {};
-        newItems.forEach((m) => {
-          if (m.folder_id) {
-            if (!folderIdCounts[m.folder_id]) folderIdCounts[m.folder_id] = { count: 0, size: 0 };
-            folderIdCounts[m.folder_id].count += 1;
-            folderIdCounts[m.folder_id].size += Number(m.file_size) || 0;
-          }
+        setMediaList((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          const toAdd = newItems.filter((m) => !existingIds.has(m.id));
+          return [...toAdd, ...prev];
         });
-
-        if (Object.keys(folderIdCounts).length > 0) {
-          setFolders((prev) => prev.map((f) => {
-            const added = folderIdCounts[f.id];
-            if (added) {
-              return {
-                ...f,
-                file_count: (f.file_count || 0) + added.count,
-                total_bytes: (f.total_bytes || 0) + added.size,
-              };
-            }
-            return f;
-          }));
-        }
       }
-      pandaCache.invalidatePrefix('media:');
-      fetchContent({ folder: activeFolder, silent: true, force: true });
+      pandaCache.invalidate('media:list');
+      fetchContent({ silent: true, force: true });
     };
 
     const handleStorageUpdated = () => {
@@ -409,16 +240,6 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-
-
-  // Filter folders to display based on current active folder scope (root vs subfolders)
-  const displayedFolders = useMemo(() => {
-    if (!currentFolder) {
-      return folders.filter((f) => !f.parent_id);
-    }
-    return folders.filter((f) => f.parent_id === currentFolder.id);
-  }, [folders, currentFolder]);
 
   // Date grouping utility
   const groupedMedia = useMemo(() => {
@@ -493,15 +314,16 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         const ids = Array.from(selectedIds);
         const idSet = new Set(ids);
 
-        // 1. Optimistically remove from UI immediately (grid reflows seamlessly)
+        // 1. Optimistically remove from UI immediately
         setMediaList((prev) => prev.filter((m) => !idSet.has(m.id)));
 
-        // 2. Clear from memory and blob cache
+        // 2. Clear from memory cache
         for (const id of ids) {
           pandaCache.removeMediaItem(id);
         }
         pandaCache.invalidate('storage:metrics');
         pandaCache.invalidate('storage:connections');
+        pandaCache.invalidate('media:list');
 
         // 3. Perform background deletes
         for (const id of ids) {
@@ -513,13 +335,14 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       } else if (deleteTarget?.id) {
         const delId = deleteTarget.id;
 
-        // 1. Optimistically remove from UI immediately (grid reflows seamlessly)
+        // 1. Optimistically remove from UI immediately
         setMediaList((prev) => prev.filter((m) => m.id !== delId));
 
-        // 2. Clear from memory and blob cache
+        // 2. Clear from memory cache
         pandaCache.removeMediaItem(delId);
         pandaCache.invalidate('storage:metrics');
         pandaCache.invalidate('storage:connections');
+        pandaCache.invalidate('media:list');
 
         // 3. Perform background delete
         const res = await fetch(`/api/media/${delId}`, { method: 'DELETE', headers: getHeaders(), credentials: 'include' });
@@ -530,39 +353,12 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         }
       }
       setDeleteTarget(null);
-      // 4. Silent background reconciliation without page reload or spinner
       fetchContent({ silent: true, force: true });
       window.dispatchEvent(new CustomEvent('panda:storage:updated'));
     } catch {
       toastError('Network error deleting files');
     } finally {
       setIsDeleting(false);
-    }
-  };
-
-  const executeDeleteFolder = async () => {
-    if (!deleteFolderTarget) return;
-    setIsDeleting(true);
-    pandaCache.invalidatePrefix('media:');
-    // Optimistically remove folder from list
-    setFolders((prev) => prev.filter((f) => f.id !== deleteFolderTarget.id));
-    try {
-      const res = await fetch(`/api/media/folders?id=${deleteFolderTarget.id}`, { method: 'DELETE', headers: getHeaders(), credentials: 'include' });
-      if (res.ok) {
-        success(`Folder "${deleteFolderTarget.name}" deleted.`);
-        if (currentFolder?.id === deleteFolderTarget.id) {
-          setCurrentFolder(null);
-        }
-        fetchContent({ silent: true, force: true });
-      } else {
-        toastError('Failed to delete folder');
-        fetchContent({ silent: true, force: true }); // Restore on failure
-      }
-    } catch {
-      toastError('Network error deleting folder');
-    } finally {
-      setIsDeleting(false);
-      setDeleteFolderTarget(null);
     }
   };
 
@@ -587,7 +383,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     if (!hasStorage) {
       if (onOpenConnectStorage) onOpenConnectStorage();
     } else if (onOpenUpload) {
-      onOpenUpload(currentFolder?.id || null);
+      onOpenUpload();
     }
   };
 
@@ -637,7 +433,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
               icon={RefreshCw}
               onClick={async () => {
                 setLoading(true);
-                pandaCache.invalidatePrefix('media:');
+                pandaCache.invalidate('media:list');
                 pandaCache.invalidate('storage:connections');
                 pandaCache.invalidate('storage:metrics');
                 await fetchContent({ sync: true });
@@ -648,17 +444,6 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
               title="Synchronize all files from cloud storage buckets"
             >
               Sync
-            </Button>
-          )}
-
-          {hasStorage && (
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={FolderPlus}
-              onClick={() => setCreateFolderOpen(true)}
-            >
-              New Folder
             </Button>
           )}
 
@@ -680,45 +465,6 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
           </Button>
         </div>
       </div>
-
-      {/* Breadcrumbs Navigation Bar */}
-      {hasStorage && (
-        <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-950 border border-slate-800 text-xs">
-          <div className="flex items-center gap-2 text-slate-400 overflow-x-auto scrollbar-none">
-            <button
-              type="button"
-              onClick={() => handleNavigateFolder(null)}
-              className={`flex items-center gap-1 hover:text-white transition-colors ${
-                !currentFolder ? 'font-bold text-teal-400' : ''
-              }`}
-            >
-              <Home className="w-3.5 h-3.5" />
-              <span>All Media</span>
-            </button>
-
-            {currentFolder && (
-              <>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
-                <span className="font-bold text-teal-300 flex items-center gap-1">
-                  <Folder className="w-3.5 h-3.5 fill-current/20" />
-                  <span>{currentFolder.name}</span>
-                </span>
-              </>
-            )}
-          </div>
-
-          {currentFolder && (
-            <button
-              type="button"
-              onClick={() => handleNavigateFolder(null)}
-              className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-white transition-colors"
-            >
-              <ArrowLeft className="w-3 h-3" />
-              <span>Back to Root</span>
-            </button>
-          )}
-        </div>
-      )}
 
       {/* Bulk Action Sticky Bar */}
       {selectedIds.size > 0 && (
@@ -760,7 +506,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       {/* MAIN GALLERY VIEW / ONBOARDING VIEW */}
       {/* ========================================================================= */}
       {loading ? (
-        <MediaGridSkeleton count={10} />
+        <MediaGridSkeleton count={12} />
       ) : !hasStorage && mediaList.length === 0 ? (
         /* ONBOARDING STATE WHEN ZERO STORAGE CONNECTED */
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 sm:p-12 text-center max-w-2xl mx-auto shadow-card space-y-6 animate-slide-up">
@@ -773,7 +519,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
               Your media library is ready when you are.
             </h3>
             <p className="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto leading-relaxed">
-              Connect your own cloud storage (Cloudflare R2, Backblaze B2, or Amazon S3) to create folders and upload photos, videos, PDFs, and documents.
+              Connect your own cloud storage (Cloudflare R2, Backblaze B2, or Amazon S3) to upload photos, videos, PDFs, and documents.
               Your files stay in <strong className="text-slate-200">YOUR</strong> storage; Panda only stores encrypted metadata to organize your library.
             </p>
           </div>
@@ -803,103 +549,59 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
             <span>Zero-Knowledge • AES-256-GCM Encrypted Storage</span>
           </div>
         </div>
+      ) : mediaList.length === 0 ? (
+        /* EMPTY STATE */
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 sm:p-12 text-center max-w-xl mx-auto shadow-card space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center mx-auto text-teal-400">
+            <ImageIcon className="w-6 h-6" />
+          </div>
+          <div>
+            <h4 className="text-base font-bold text-white">No media files yet</h4>
+            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+              Upload photos, videos, vector files, PDFs, or documents to store in your connected cloud storage.
+            </p>
+          </div>
+          <div className="pt-2 flex justify-center">
+            <Button variant="primary" size="sm" icon={Upload} onClick={handleUploadClick}>
+              Upload File
+            </Button>
+          </div>
+        </div>
       ) : (
+        /* MEDIA FILES GROUPED BY DATE */
         <div className="space-y-8">
-          {/* FOLDERS GRID (Rendered when folders exist in current scope) */}
-          {displayedFolders.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  {currentFolder ? 'Subfolders' : 'Folders'} ({displayedFolders.length})
+          {Object.entries(groupedMedia).map(([dateLabel, items]) => (
+            <div key={dateLabel} className="space-y-3">
+              <div className="flex items-center gap-3">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  {dateLabel}
+                </h3>
+                <span className="text-[10px] text-slate-500 font-mono">
+                  ({items.length} {items.length === 1 ? 'file' : 'files'})
                 </span>
+                <div className="flex-1 border-t border-slate-800/80" />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {displayedFolders.map((folder) => (
-                  <FolderCard
-                    key={folder.id}
-                    folder={folder}
-                    onOpen={(f) => handleNavigateFolder(f)}
-                    onDelete={(f) => setDeleteFolderTarget(f)}
-                    onRename={() => {}}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+                {items.map((item) => (
+                  <MediaCard
+                    key={item.id}
+                    item={item}
+                    isSelected={selectedIds.has(item.id)}
+                    isSelectionMode={isSelectionMode}
+                    onToggleSelect={() => toggleSelect(item.id)}
+                    onClick={() => {
+                      if (isSelectionMode) toggleSelect(item.id);
+                      else handleOpenLightbox(item);
+                    }}
+                    onDelete={(target) => setDeleteTarget(target)}
                   />
                 ))}
               </div>
             </div>
-          )}
-
-          {/* EMPTY STATE FOR CURRENT FOLDER / LIBRARY */}
-          {mediaList.length === 0 && displayedFolders.length === 0 ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 sm:p-12 text-center max-w-xl mx-auto shadow-card space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center mx-auto text-teal-400">
-                <ImageIcon className="w-6 h-6" />
-              </div>
-              <div>
-                <h4 className="text-base font-bold text-white">
-                  {currentFolder ? `"${currentFolder.name}" is empty` : 'No media files yet'}
-                </h4>
-                <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-                  {currentFolder
-                    ? 'Upload photos, videos, or documents to store inside this folder.'
-                    : 'Upload your first photo, video, PDF, or document to your connected cloud storage.'}
-                </p>
-              </div>
-              <div className="pt-2 flex justify-center gap-2">
-                <Button variant="secondary" size="sm" icon={FolderPlus} onClick={() => setCreateFolderOpen(true)}>
-                  New Folder
-                </Button>
-                <Button variant="primary" size="sm" icon={Upload} onClick={() => onOpenUpload && onOpenUpload(currentFolder?.id || null)}>
-                  Upload File
-                </Button>
-              </div>
-            </div>
-          ) : (
-            /* MEDIA FILES GROUPED BY DATE */
-            Object.entries(groupedMedia).map(([dateLabel, items]) => (
-              <div key={dateLabel} className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    {dateLabel}
-                  </h3>
-                  <span className="text-[10px] text-slate-500 font-mono">
-                    ({items.length} {items.length === 1 ? 'file' : 'files'})
-                  </span>
-                  <div className="flex-1 border-t border-slate-800/80" />
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
-                  {items.map((item) => (
-                    <MediaCard
-                      key={item.id}
-                      item={item}
-                      isSelected={selectedIds.has(item.id)}
-                      isSelectionMode={isSelectionMode}
-                      onToggleSelect={() => toggleSelect(item.id)}
-                      onClick={() => {
-                        if (isSelectionMode) toggleSelect(item.id);
-                        else handleOpenLightbox(item);
-                      }}
-                      onDelete={(target) => setDeleteTarget(target)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
+          ))}
         </div>
       )}
-
-      {/* CREATE FOLDER MODAL */}
-      <CreateFolderModal
-        isOpen={createFolderOpen}
-        onClose={() => setCreateFolderOpen(false)}
-        parentId={currentFolder?.id || null}
-        onFolderCreated={(newFolder) => {
-          // Optimistically add folder immediately
-          if (newFolder) setFolders((prev) => [newFolder, ...prev]);
-          fetchContent({ silent: true });
-        }}
-      />
 
       {/* LIGHTBOX FOR PHOTO / VIDEO / PDF PREVIEW */}
       <MediaLightbox
@@ -932,18 +634,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         onConfirm={executeDelete}
         onCancel={() => setDeleteTarget(null)}
       />
-
-      {/* DELETE FOLDER CONFIRMATION MODAL */}
-      <ConfirmDialog
-        isOpen={!!deleteFolderTarget}
-        title={`Delete folder "${deleteFolderTarget?.name}"?`}
-        message="Deleting this folder will remove the folder organization. Contained media files will safely remain in your library."
-        confirmText="Delete Folder"
-        confirmVariant="danger"
-        isLoading={isDeleting}
-        onConfirm={executeDeleteFolder}
-        onCancel={() => setDeleteFolderTarget(null)}
-      />
     </div>
   );
 }
+
