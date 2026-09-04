@@ -3,10 +3,6 @@ import { getAuthenticatedUser } from '@/lib/auth/session';
 import { listUserMedia } from '@/lib/db/media';
 import { StorageManager } from '@/lib/storage/storage-manager';
 
-// In-memory auto-sync throttling map to prevent excessive cloud bucket requests on rapid UI polling
-const lastAutoSyncByUser = new Map();
-const AUTO_SYNC_INTERVAL_MS = 6000; // Auto-reconcile bucket every 6 seconds on active use
-
 export async function GET(request) {
   const authData = await getAuthenticatedUser(request);
   if (!authData) {
@@ -28,16 +24,13 @@ export async function GET(request) {
 
   try {
     const shouldSync = searchParams.get('sync') === 'true';
-    const lastSync = lastAutoSyncByUser.get(authData.user.id) || 0;
-    const now = Date.now();
 
-    // Automatic silent cloud bucket reconciliation: runs if explicitly requested OR automatically in background
-    if (shouldSync || (now - lastSync > AUTO_SYNC_INTERVAL_MS)) {
-      lastAutoSyncByUser.set(authData.user.id, now);
+    // Cloud bucket reconciliation runs when explicitly requested by user (e.g. clicking Sync)
+    if (shouldSync) {
       try {
         await StorageManager.syncStorageMedia(authData.user.id, token);
       } catch (syncErr) {
-        console.warn('[API media] Auto-sync notice:', syncErr.message);
+        console.warn('[API media] Sync notice:', syncErr.message);
       }
     }
 

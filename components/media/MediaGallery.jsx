@@ -231,7 +231,6 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       setMediaList((prev) => reconcileMediaItems(prev, cached.items || []));
       setLoading(false);
     } else {
-      setFolders([]);
       setMediaList([]);
       setLoading(true);
     }
@@ -262,7 +261,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       if (sync) params.set('sync', 'true');
       if (session?.access_token) params.set('token', session.access_token);
 
-      const foldersUrl = `/api/media/folders?parentId=${folder ? folder.id : 'root'}`;
+      const foldersUrl = `/api/media/folders?parentId=all`;
       const mediaUrl = `/api/media?${params.toString()}`;
       const headers = { 'Cache-Control': 'no-cache' };
       if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
@@ -412,6 +411,14 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   }, []);
 
 
+
+  // Filter folders to display based on current active folder scope (root vs subfolders)
+  const displayedFolders = useMemo(() => {
+    if (!currentFolder) {
+      return folders.filter((f) => !f.parent_id);
+    }
+    return folders.filter((f) => f.parent_id === currentFolder.id);
+  }, [folders, currentFolder]);
 
   // Date grouping utility
   const groupedMedia = useMemo(() => {
@@ -799,16 +806,16 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       ) : (
         <div className="space-y-8">
           {/* FOLDERS GRID (Rendered when folders exist in current scope) */}
-          {folders.length > 0 && (
+          {displayedFolders.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Folders ({folders.length})
+                  {currentFolder ? 'Subfolders' : 'Folders'} ({displayedFolders.length})
                 </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {folders.map((folder) => (
+                {displayedFolders.map((folder) => (
                   <FolderCard
                     key={folder.id}
                     folder={folder}
@@ -822,7 +829,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
           )}
 
           {/* EMPTY STATE FOR CURRENT FOLDER / LIBRARY */}
-          {mediaList.length === 0 && folders.length === 0 ? (
+          {mediaList.length === 0 && displayedFolders.length === 0 ? (
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 sm:p-12 text-center max-w-xl mx-auto shadow-card space-y-4">
               <div className="w-12 h-12 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center mx-auto text-teal-400">
                 <ImageIcon className="w-6 h-6" />
