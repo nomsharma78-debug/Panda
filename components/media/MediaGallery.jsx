@@ -39,6 +39,87 @@ import { useToast } from '@/components/context/ToastContext';
 import { useAuth } from '@/components/context/AuthContext';
 import { pandaCache, mediaBlobCache } from '@/lib/client-cache';
 
+// Granular list reconciliation helpers to preserve object identities and prevent redundant re-renders
+function reconcileMediaItems(prevList, incomingList) {
+  if (!prevList || prevList.length === 0) return incomingList || [];
+  if (!incomingList || incomingList.length === 0) return [];
+
+  const prevMap = new Map(prevList.map((m) => [m.id, m]));
+
+  if (prevList.length === incomingList.length) {
+    let same = true;
+    for (let i = 0; i < prevList.length; i++) {
+      const p = prevList[i];
+      const inc = incomingList[i];
+      if (
+        !inc ||
+        p.id !== inc.id ||
+        p.updated_at !== inc.updated_at ||
+        p.original_filename !== inc.original_filename ||
+        p.file_size !== inc.file_size
+      ) {
+        same = false;
+        break;
+      }
+    }
+    if (same) return prevList;
+  }
+
+  return incomingList.map((inc) => {
+    const existing = prevMap.get(inc.id);
+    if (
+      existing &&
+      existing.updated_at === inc.updated_at &&
+      existing.original_filename === inc.original_filename &&
+      existing.file_size === inc.file_size
+    ) {
+      return existing;
+    }
+    return inc;
+  });
+}
+
+function reconcileFolders(prevFolders, incomingFolders) {
+  if (!prevFolders || prevFolders.length === 0) return incomingFolders || [];
+  if (!incomingFolders || incomingFolders.length === 0) return [];
+
+  const prevMap = new Map(prevFolders.map((f) => [f.id, f]));
+
+  if (prevFolders.length === incomingFolders.length) {
+    let same = true;
+    for (let i = 0; i < prevFolders.length; i++) {
+      const p = prevFolders[i];
+      const inc = incomingFolders[i];
+      if (
+        !inc ||
+        p.id !== inc.id ||
+        p.name !== inc.name ||
+        p.file_count !== inc.file_count ||
+        p.total_bytes !== inc.total_bytes ||
+        p.color !== inc.color
+      ) {
+        same = false;
+        break;
+      }
+    }
+    if (same) return prevFolders;
+  }
+
+  return incomingFolders.map((inc) => {
+    const existing = prevMap.get(inc.id);
+    if (
+      existing &&
+      existing.name === inc.name &&
+      existing.file_count === inc.file_count &&
+      existing.total_bytes === inc.total_bytes &&
+      existing.color === inc.color
+    ) {
+      return existing;
+    }
+    return inc;
+  });
+}
+
 export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   const { session } = useAuth();
   const { success, error: toastError } = useToast();
@@ -107,8 +188,8 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     const key = folder ? `media:folder:${folder.id}` : 'media:root';
     const cached = pandaCache.get(key);
     if (cached) {
-      setFolders(cached.folders || []);
-      setMediaList(cached.items || []);
+      setFolders((prev) => reconcileFolders(prev, cached.folders || []));
+      setMediaList((prev) => reconcileMediaItems(prev, cached.items || []));
       setLoading(false);
     } else {
       setFolders([]);
@@ -119,7 +200,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
 
   // Fast fetch: only media + folders with smart SWR caching
   const fetchContent = useCallback(async (opts = {}) => {
-    const { folder = currentFolder, filter = activeFilter, search = searchQuery, sync = false, force = false } = opts;
+    const { folder = currentFolder, filter = activeFilter, search = searchQuery, sync = false, force = false, silent = false } = opts;
 
     const cacheKey = folder ? `media:folder:${folder.id}` : 'media:root';
 
@@ -127,8 +208,8 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     if (!force && !sync && !search && filter === 'all') {
       const cached = pandaCache.get(cacheKey);
       if (cached) {
-        setFolders(cached.folders || []);
-        setMediaList(cached.items || []);
+        setFolders((prev) => reconcileFolders(prev, cached.folders || []));
+        setMediaList((prev) => reconcileMediaItems(prev, cached.items || []));
         setLoading(false);
         firstLoadDoneRef.current = true;
         return;
@@ -159,13 +240,13 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       if (foldersRes.ok) {
         const data = await foldersRes.json();
         newFolders = data.folders || [];
-        setFolders(newFolders);
+        setFolders((prev) => reconcileFolders(prev, newFolders));
       }
 
       if (mediaRes.ok) {
         const data = await mediaRes.json();
         newItems = data.items || [];
-        setMediaList(newItems);
+        setMediaList((prev) => reconcileMediaItems(prev, newItems));
         if (filter === 'all' && !search) {
           pandaCache.set(cacheKey, { items: newItems, folders: newFolders }, 120_000);
         }
@@ -174,7 +255,9 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       console.error('[MediaGallery] Fetch content error:', err);
     } finally {
       firstLoadDoneRef.current = true;
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [currentFolder, activeFilter, searchQuery, session?.access_token]);
 
@@ -183,6 +266,24 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     checkStorage(false);
     fetchContent({});
   }, [session?.access_token, currentFolder, activeFilter, searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Silent background revalidation on window focus and interval (0ms interruption, zero page flash)
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchContent({ silent: true });
+    };
+    window.addEventListener('focus', handleFocus);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchContent({ silent: true });
+      }
+    }, 20_000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
+  }, [fetchContent]);
 
   // Listen to global upload/storage events
   useEffect(() => {
@@ -199,7 +300,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         }
       }
       pandaCache.invalidatePrefix('media:');
-      fetchContent({});
+      fetchContent({ silent: true });
     };
 
     const handleStorageUpdated = () => {
@@ -287,26 +388,40 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     setIsDeleting(true);
     setLightboxOpen(false);
     try {
-      pandaCache.invalidatePrefix('media:');
-      pandaCache.invalidate('storage:metrics');
-      pandaCache.invalidate('storage:connections');
-
       if (deleteTarget === 'bulk') {
         const ids = Array.from(selectedIds);
-        // Optimistically remove from UI immediately
-        setMediaList((prev) => prev.filter((m) => !ids.includes(m.id)));
+        const idSet = new Set(ids);
+
+        // 1. Optimistically remove from UI immediately (grid reflows seamlessly)
+        setMediaList((prev) => prev.filter((m) => !idSet.has(m.id)));
+
+        // 2. Clear from memory and blob cache
         for (const id of ids) {
-          mediaBlobCache.delete(id);
+          pandaCache.removeMediaItem(id);
+        }
+        pandaCache.invalidate('storage:metrics');
+        pandaCache.invalidate('storage:connections');
+
+        // 3. Perform background deletes
+        for (const id of ids) {
           await fetch(`/api/media/${id}`, { method: 'DELETE', headers: getHeaders(), credentials: 'include' });
         }
         success(`Deleted ${ids.length} files successfully.`);
         setSelectedIds(new Set());
         setIsSelectionMode(false);
       } else if (deleteTarget?.id) {
-        // Optimistically remove from UI immediately
-        mediaBlobCache.delete(deleteTarget.id);
-        setMediaList((prev) => prev.filter((m) => m.id !== deleteTarget.id));
-        const res = await fetch(`/api/media/${deleteTarget.id}`, { method: 'DELETE', headers: getHeaders(), credentials: 'include' });
+        const delId = deleteTarget.id;
+
+        // 1. Optimistically remove from UI immediately (grid reflows seamlessly)
+        setMediaList((prev) => prev.filter((m) => m.id !== delId));
+
+        // 2. Clear from memory and blob cache
+        pandaCache.removeMediaItem(delId);
+        pandaCache.invalidate('storage:metrics');
+        pandaCache.invalidate('storage:connections');
+
+        // 3. Perform background delete
+        const res = await fetch(`/api/media/${delId}`, { method: 'DELETE', headers: getHeaders(), credentials: 'include' });
         if (res.ok) {
           success(`Deleted "${deleteTarget.original_filename}"`);
         } else {
@@ -314,7 +429,8 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         }
       }
       setDeleteTarget(null);
-      await fetchContent({ force: true });
+      // 4. Silent background reconciliation without page reload or spinner
+      fetchContent({ silent: true, force: true });
       window.dispatchEvent(new CustomEvent('panda:storage:updated'));
     } catch {
       toastError('Network error deleting files');
@@ -336,10 +452,10 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         if (currentFolder?.id === deleteFolderTarget.id) {
           setCurrentFolder(null);
         }
-        fetchContent({ force: true });
+        fetchContent({ silent: true, force: true });
       } else {
         toastError('Failed to delete folder');
-        fetchContent({ force: true }); // Restore on failure
+        fetchContent({ silent: true, force: true }); // Restore on failure
       }
     } catch {
       toastError('Network error deleting folder');

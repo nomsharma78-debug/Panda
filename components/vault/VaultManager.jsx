@@ -121,6 +121,24 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
     fetchItems(false);
   }, [fetchItems]);
 
+  // Silent background revalidation on window focus and interval (0ms interruption)
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchItems(true);
+    };
+    window.addEventListener('focus', handleFocus);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchItems(true);
+      }
+    }, 30_000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
+  }, [fetchItems]);
+
   useEffect(() => {
     const handleVaultUpdated = () => {
       pandaCache.invalidatePrefix('vault:');

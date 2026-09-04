@@ -17,7 +17,7 @@ import {
 import { useToast } from '@/components/context/ToastContext';
 import { Badge } from '@/components/ui/Badge';
 
-export function VaultItemCard({ item, decryptedData, onDelete }) {
+export const VaultItemCard = React.memo(function VaultItemCard({ item, decryptedData, onDelete }) {
   const { success } = useToast();
   const [showSensitive, setShowSensitive] = useState(false);
   const [copiedKey, setCopiedKey] = useState(null);
@@ -202,4 +202,10 @@ export function VaultItemCard({ item, decryptedData, onDelete }) {
       </div>
     </div>
   );
-}
+}, (prev, next) => {
+  return (
+    prev.item.id === next.item.id &&
+    prev.item.updated_at === next.item.updated_at &&
+    prev.decryptedData === next.decryptedData
+  );
+});

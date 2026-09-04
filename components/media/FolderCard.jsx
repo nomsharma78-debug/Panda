@@ -14,7 +14,7 @@ const COLOR_STYLES = {
   rose: { bg: 'bg-rose-500/10 hover:bg-rose-500/15', icon: 'text-rose-400', border: 'border-rose-500/20 hover:border-rose-500/40' },
 };
 
-export function FolderCard({ folder, onOpen, onRename, onDelete }) {
+export const FolderCard = React.memo(function FolderCard({ folder, onOpen, onRename, onDelete }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const colorStyle = COLOR_STYLES[folder.color] || COLOR_STYLES.teal;
 
@@ -82,4 +82,12 @@ export function FolderCard({ folder, onOpen, onRename, onDelete }) {
       </div>
     </div>
   );
-}
+}, (prev, next) => {
+  return (
+    prev.folder.id === next.folder.id &&
+    prev.folder.name === next.folder.name &&
+    prev.folder.file_count === next.folder.file_count &&
+    prev.folder.total_bytes === next.folder.total_bytes &&
+    prev.folder.color === next.folder.color
+  );
+});

@@ -15,7 +15,7 @@ import { formatBytes } from '@/components/ui/Progress';
 import { useAuth } from '@/components/context/AuthContext';
 import { mediaBlobCache } from '@/lib/client-cache';
 
-export function MediaCard({
+export const MediaCard = React.memo(function MediaCard({
   media,
   item,
   isSelected = false,
@@ -257,4 +257,15 @@ export function MediaCard({
       )}
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  const prevItem = prevProps.media || prevProps.item || {};
+  const nextItem = nextProps.media || nextProps.item || {};
+  return (
+    prevItem.id === nextItem.id &&
+    prevItem.updated_at === nextItem.updated_at &&
+    prevItem.original_filename === nextItem.original_filename &&
+    prevItem.file_size === nextItem.file_size &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.isSelectionMode === nextProps.isSelectionMode
+  );
+});
