@@ -217,7 +217,7 @@ export function MediaUploadModal({
                 </div>
                 <p className="text-sm font-semibold text-white">Click or drag & drop files here</p>
                 <p className="text-xs text-slate-400 mt-1 max-w-xs">
-                  Supports photos, videos, PDFs, and documents up to 500MB
+                  Supports photos, videos, CDR vector drawings, PDFs, and documents up to 500MB
                 </p>
               </div>
             ) : (

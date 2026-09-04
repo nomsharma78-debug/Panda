@@ -48,7 +48,7 @@ export async function POST(request) {
 
     const originalFilename = sanitizeFilename(file.name);
     const mimeType = file.type || 'application/octet-stream';
-    const mediaType = getMediaTypeFromMime(mimeType);
+    const mediaType = getMediaTypeFromMime(mimeType, originalFilename);
 
     // Convert file arrayBuffer to Node Buffer
     const arrayBuffer = await file.arrayBuffer();

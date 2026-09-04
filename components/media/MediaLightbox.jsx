@@ -17,6 +17,7 @@ import {
   Calendar,
   Loader2,
   ImageOff,
+  Palette,
 } from 'lucide-react';
 import { VideoPlayer } from './VideoPlayer';
 import { formatBytes } from '@/components/ui/Progress';
@@ -68,9 +69,16 @@ export function MediaLightbox({
     mime === 'application/pdf' ||
     Boolean(filename.match(/\.pdf(\.enc)?$/i));
 
+  const isCdr =
+    type === 'cdr' ||
+    mime.includes('cdr') ||
+    mime.includes('coreldraw') ||
+    Boolean(filename.match(/\.cdr(\.enc)?$/i));
+
   const isPhoto =
     !isVideo &&
     !isPdf &&
+    !isCdr &&
     (type === 'photo' ||
       type === 'image' ||
       mime.startsWith('image/') ||
@@ -309,7 +317,32 @@ export function MediaLightbox({
             <VideoPlayer src={videoUrl} mimeType={currentItem.mime_type} autoPlay />
           )}
 
-          {(isPdf || currentItem.media_type === 'document') && (
+          {isCdr && (
+            <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl p-8 flex flex-col items-center text-center shadow-2xl animate-fade-in">
+              <div className="w-20 h-20 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(16,185,129,0.25)]">
+                <Palette className="w-10 h-10" />
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs font-mono font-semibold mb-3">
+                <span>CorelDRAW Vector Graphic (.cdr)</span>
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2 max-w-md truncate">{currentItem.original_filename}</h3>
+              <p className="text-xs text-slate-400 mb-6 font-mono">
+                {formatBytes(currentItem.file_size)} • Vector Design File
+              </p>
+              <div className="flex items-center gap-3">
+                <a
+                  href={downloadUrl}
+                  download={currentItem.original_filename}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download .CDR File</span>
+                </a>
+              </div>
+            </div>
+          )}
+
+          {!isCdr && (isPdf || currentItem.media_type === 'document') && (
             <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl p-8 flex flex-col items-center text-center shadow-2xl">
               <div className="w-16 h-16 rounded-2xl bg-teal-500/10 border border-teal-500/30 text-teal-400 flex items-center justify-center mb-4">
                 <FileText className="w-8 h-8" />
@@ -339,7 +372,7 @@ export function MediaLightbox({
             </div>
           )}
 
-          {(currentItem.media_type === 'archive' || currentItem.media_type === 'other') && (
+          {!isCdr && !isPdf && !isPhoto && !isVideo && (currentItem.media_type === 'archive' || currentItem.media_type === 'other') && (
             <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-8 flex flex-col items-center text-center shadow-2xl">
               <FileText className="w-12 h-12 text-slate-400 mb-4" />
               <h3 className="text-base font-semibold text-white mb-1">{currentItem.original_filename}</h3>

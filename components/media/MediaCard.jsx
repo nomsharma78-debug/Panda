@@ -9,6 +9,7 @@ import {
   File,
   Lock,
   ImageOff,
+  Palette,
 } from 'lucide-react';
 import { formatBytes } from '@/components/ui/Progress';
 import { useAuth } from '@/components/context/AuthContext';
@@ -40,9 +41,16 @@ export function MediaCard({
     mime === 'application/pdf' ||
     Boolean(filename.match(/\.pdf(\.enc)?$/i));
 
+  const isCdr =
+    type === 'cdr' ||
+    mime.includes('cdr') ||
+    mime.includes('coreldraw') ||
+    Boolean(filename.match(/\.cdr(\.enc)?$/i));
+
   const isPhoto =
     !isVideo &&
     !isPdf &&
+    !isCdr &&
     (type === 'photo' ||
       type === 'image' ||
       mime.startsWith('image/') ||
@@ -190,10 +198,22 @@ export function MediaCard({
         </div>
       ) : isPdf ? (
         <div className="flex flex-col items-center justify-center p-4 text-center">
-          <div className="w-12 h-12 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center mb-2">
+          <div className="w-12 h-12 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center mb-2 shadow-[0_0_15px_rgba(244,63,94,0.15)]">
             <FileText className="w-6 h-6" />
           </div>
           <span className="text-[11px] font-mono font-semibold text-rose-300 uppercase tracking-wider">PDF</span>
+        </div>
+      ) : isCdr ? (
+        <div className="flex flex-col items-center justify-center p-4 text-center group-hover:scale-105 transition-transform">
+          <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mb-2 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+            <Palette className="w-6 h-6" />
+          </div>
+          <span className="text-[11px] font-mono font-bold text-emerald-300 uppercase tracking-wider">
+            CDR
+          </span>
+          <span className="text-[9px] text-slate-400 font-medium tracking-tight mt-0.5">
+            CorelDRAW Vector
+          </span>
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center p-4 text-center">

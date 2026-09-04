@@ -25,6 +25,7 @@ import {
   ChevronRight,
   ArrowLeft,
   Home,
+  Palette,
 } from 'lucide-react';
 import { MediaCard } from './MediaCard';
 import { MediaLightbox } from './MediaLightbox';
@@ -355,6 +356,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     { id: 'all', label: 'All Files', icon: Layers },
     { id: 'photo', label: 'Photos', icon: ImageIcon },
     { id: 'video', label: 'Videos', icon: Film },
+    { id: 'cdr', label: 'CDR Vector', icon: Palette },
     { id: 'pdf', label: 'PDFs', icon: FileText },
     { id: 'document', label: 'Documents', icon: FileText },
     { id: 'archive', label: 'Archives', icon: Archive },
