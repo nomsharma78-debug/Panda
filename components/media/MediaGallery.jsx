@@ -120,18 +120,39 @@ function reconcileFolders(prevFolders, incomingFolders) {
   });
 }
 
+// Helper to restore active folder from URL or sessionStorage on mount/reload
+function getInitialFolderFromUrl() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const folderId = params.get('folder');
+    if (folderId) {
+      const stored = window.sessionStorage.getItem('panda_active_folder');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && parsed.id === folderId) {
+          return parsed;
+        }
+      }
+      return { id: folderId, name: 'Folder' };
+    }
+  } catch {}
+  return null;
+}
+
 export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   const { session } = useAuth();
   const { success, error: toastError } = useToast();
 
-  // Restore from cache on mount for instant display
-  const cachedRoot = pandaCache.get('media:root');
-  const [mediaList, setMediaList] = useState(cachedRoot?.items || []);
-  const [folders, setFolders] = useState(cachedRoot?.folders || []);
-  const [currentFolder, setCurrentFolder] = useState(null); // null = Root
+  const [currentFolder, setCurrentFolder] = useState(() => getInitialFolderFromUrl());
+  const initialKey = currentFolder ? `media:folder:${currentFolder.id}` : 'media:root';
+  const cachedInitial = pandaCache.get(initialKey);
+
+  const [mediaList, setMediaList] = useState(cachedInitial?.items || []);
+  const [folders, setFolders] = useState(cachedInitial?.folders || []);
   const [hasStorage, setHasStorage] = useState(pandaCache.get('storage:connections') ? (pandaCache.get('storage:connections')?.connections || []).length > 0 : true);
   // Only show skeleton on very first load (no cache at all)
-  const [loading, setLoading] = useState(!cachedRoot);
+  const [loading, setLoading] = useState(!cachedInitial);
   const [activeFilter, setActiveFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -148,7 +169,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
 
   const abortRef = React.useRef(null);
   const mountedRef = React.useRef(true);
-  const firstLoadDoneRef = React.useRef(!!cachedRoot); // skip full skeleton if cached
+  const firstLoadDoneRef = React.useRef(!!cachedInitial); // skip full skeleton if cached
 
   // Auth headers helper
   const getHeaders = useCallback(() => {
@@ -189,6 +210,20 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   const handleNavigateFolder = useCallback((folder) => {
     setCurrentFolder(folder);
     currentFolderRef.current = folder;
+    if (typeof window !== 'undefined') {
+      try {
+        const url = new URL(window.location.href);
+        if (folder) {
+          url.searchParams.set('folder', folder.id);
+          window.history.replaceState({}, '', url.toString());
+          window.sessionStorage.setItem('panda_active_folder', JSON.stringify(folder));
+        } else {
+          url.searchParams.delete('folder');
+          window.history.replaceState({}, '', url.toString());
+          window.sessionStorage.removeItem('panda_active_folder');
+        }
+      } catch {}
+    }
     const key = folder ? `media:folder:${folder.id}` : 'media:root';
     const cached = pandaCache.get(key);
     if (cached) {
@@ -244,6 +279,17 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         const data = await foldersRes.json();
         newFolders = data.folders || [];
         setFolders((prev) => reconcileFolders(prev, newFolders));
+
+        if (currentFolderRef.current) {
+          const match = newFolders.find((f) => f.id === currentFolderRef.current.id);
+          if (match && (match.name !== currentFolderRef.current.name || currentFolderRef.current.name === 'Folder')) {
+            setCurrentFolder(match);
+            currentFolderRef.current = match;
+            try {
+              window.sessionStorage.setItem('panda_active_folder', JSON.stringify(match));
+            } catch {}
+          }
+        }
       }
 
       if (mediaRes.ok) {
@@ -282,6 +328,14 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       }
     };
 
+    const handlePopState = () => {
+      const restored = getInitialFolderFromUrl();
+      setCurrentFolder(restored);
+      currentFolderRef.current = restored;
+      fetchContent({ folder: restored });
+    };
+
+    window.addEventListener('popstate', handlePopState);
     window.addEventListener('focus', handleRevalidate);
     document.addEventListener('visibilitychange', handleVisibility);
 
@@ -292,6 +346,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     }, 8_000);
 
     return () => {
+      window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('focus', handleRevalidate);
       document.removeEventListener('visibilitychange', handleVisibility);
       clearInterval(interval);
