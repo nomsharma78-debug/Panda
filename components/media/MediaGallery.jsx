@@ -74,6 +74,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   const { success, error: toastError } = useToast();
 
   const cachedInitial = pandaCache.get('media:list');
+  const hasValidCache = Array.isArray(cachedInitial) && cachedInitial.length > 0;
 
   const [mediaList, setMediaList] = useState(cachedInitial || []);
   const [hasStorage, setHasStorage] = useState(
@@ -81,8 +82,9 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       ? (pandaCache.get('storage:connections')?.connections || []).length > 0
       : true
   );
-  // Only show skeleton on very first load if no cached data exists
-  const [loading, setLoading] = useState(!cachedInitial);
+  // Only show skeleton on initial load if no cached data exists
+  const [loading, setLoading] = useState(!hasValidCache);
+  const [firstLoadDone, setFirstLoadDone] = useState(hasValidCache);
   const [activeFilter, setActiveFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -95,7 +97,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const firstLoadDoneRef = React.useRef(!!cachedInitial);
+  const firstLoadDoneRef = React.useRef(hasValidCache);
 
   // Auth headers helper
   const getHeaders = useCallback(() => {
@@ -138,10 +140,11 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       // Render instantly from memory cache to avoid loading flash
       if (!force && !sync && !search && filter === 'all') {
         const cached = pandaCache.get('media:list');
-        if (cached) {
+        if (cached && Array.isArray(cached) && cached.length > 0) {
           setMediaList((prev) => reconcileMediaItems(prev, cached));
           setLoading(false);
           firstLoadDoneRef.current = true;
+          setFirstLoadDone(true);
         }
       }
 
@@ -163,13 +166,14 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
           const newItems = data.items || [];
           setMediaList((prev) => reconcileMediaItems(prev, newItems));
           if (filter === 'all' && !search) {
-            pandaCache.set('media:list', newItems, 60_000);
+            pandaCache.set('media:list', newItems, 120_000);
           }
         }
       } catch (err) {
         console.error('[MediaGallery] Fetch content error:', err);
       } finally {
         firstLoadDoneRef.current = true;
+        setFirstLoadDone(true);
         if (!silent) {
           setLoading(false);
         }
@@ -505,7 +509,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       {/* ========================================================================= */}
       {/* MAIN GALLERY VIEW / ONBOARDING VIEW */}
       {/* ========================================================================= */}
-      {loading ? (
+      {loading || (!firstLoadDone && mediaList.length === 0) ? (
         <MediaGridSkeleton count={12} />
       ) : !hasStorage && mediaList.length === 0 ? (
         /* ONBOARDING STATE WHEN ZERO STORAGE CONNECTED */
