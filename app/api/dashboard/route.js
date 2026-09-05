@@ -4,6 +4,7 @@ import { getVaultStats } from '@/lib/db/vault';
 import { getMediaStats, getRecentMedia } from '@/lib/db/media';
 import { getCombinedStorageMetrics, listUserStorageConnections } from '@/lib/db/storage';
 import { listUserAuditLogs } from '@/lib/db/audit';
+import { StorageManager } from '@/lib/storage/storage-manager';
 
 function extractUserToken(request) {
   const authHeader = request.headers.get ? request.headers.get('authorization') : request.headers?.authorization;
@@ -22,64 +23,53 @@ export async function GET(request) {
   const userId = authData.user.id;
   const userToken = extractUserToken(request);
 
-  // Safe individual metric retrieval with independent fallbacks
-  let vaultStats = { login: 0, card: 0, note: 0, identity: 0, total: 0 };
-  let mediaStats = { images: 0, videos: 0, audio: 0, documents: 0, total: 0, totalBytes: 0 };
-  let storageMetrics = { totalBytes: 0, providerCount: 0, providers: [] };
-  let storageConnections = [];
-  let recentMedia = [];
-  let auditLogs = [];
+  // Run all metric queries in parallel for ultra-fast response time
+  const [vaultRes, mediaRes, storageMetricsRes, storageConnsRes, recentMediaRes, auditLogsRes] = await Promise.allSettled([
+    getVaultStats(userId, userToken),
+    getMediaStats(userId, userToken),
+    getCombinedStorageMetrics(userId, userToken),
+    listUserStorageConnections(userId, userToken),
+    getRecentMedia(userId, 6, userToken),
+    listUserAuditLogs(userId, 8, userToken),
+  ]);
 
-  try {
-    const v = await getVaultStats(userId, userToken);
-    if (v) vaultStats = v;
-  } catch (e) {
-    console.warn('[Dashboard API] vaultStats notice:', e.message);
+  let vaultStats = vaultRes.status === 'fulfilled' && vaultRes.value ? vaultRes.value : { login: 0, card: 0, note: 0, identity: 0, total: 0 };
+  let mediaStats = mediaRes.status === 'fulfilled' && mediaRes.value ? mediaRes.value : { images: 0, videos: 0, audio: 0, documents: 0, total: 0, totalBytes: 0 };
+  const storageMetrics = storageMetricsRes.status === 'fulfilled' && storageMetricsRes.value ? storageMetricsRes.value : { totalBytes: 0, providerCount: 0, providers: [] };
+  const storageConnections = storageConnsRes.status === 'fulfilled' && storageConnsRes.value ? storageConnsRes.value : [];
+  let recentMedia = recentMediaRes.status === 'fulfilled' && recentMediaRes.value ? recentMediaRes.value : [];
+  const auditLogs = auditLogsRes.status === 'fulfilled' && auditLogsRes.value ? auditLogsRes.value : [];
+
+  // Auto-discover media files from connected buckets if media count is 0
+  if ((!mediaStats.total || mediaStats.total === 0 || recentMedia.length === 0) && storageConnections.length > 0) {
+    try {
+      const discovered = await StorageManager.syncStorageMedia(userId, userToken);
+      if (discovered && discovered.length > 0) {
+        const [refreshedStats, refreshedRecent] = await Promise.all([
+          getMediaStats(userId, userToken),
+          getRecentMedia(userId, 6, userToken),
+        ]);
+        mediaStats = refreshedStats;
+        recentMedia = refreshedRecent;
+      }
+    } catch {}
   }
 
-  try {
-    const m = await getMediaStats(userId, userToken);
-    if (m) mediaStats = m;
-  } catch (e) {
-    console.warn('[Dashboard API] mediaStats notice:', e.message);
-  }
-
-  try {
-    const s = await getCombinedStorageMetrics(userId, userToken);
-    if (s) storageMetrics = s;
-  } catch (e) {
-    console.warn('[Dashboard API] storageMetrics notice:', e.message);
-  }
-
-  try {
-    const sc = await listUserStorageConnections(userId, userToken);
-    if (sc) storageConnections = sc;
-  } catch (e) {
-    console.warn('[Dashboard API] storageConnections notice:', e.message);
-  }
-
-  try {
-    const rm = await getRecentMedia(userId, 6, userToken);
-    if (rm) recentMedia = rm;
-  } catch (e) {
-    console.warn('[Dashboard API] recentMedia notice:', e.message);
-  }
-
-  try {
-    const al = await listUserAuditLogs(userId, 8, userToken);
-    if (al) auditLogs = al;
-  } catch (e) {
-    console.warn('[Dashboard API] auditLogs notice:', e.message);
-  }
-
-  return NextResponse.json({
-    vault: vaultStats,
-    media: mediaStats,
-    storage: {
-      ...storageMetrics,
-      connections: storageConnections,
+  return NextResponse.json(
+    {
+      vault: vaultStats,
+      media: mediaStats,
+      storage: {
+        ...storageMetrics,
+        connections: storageConnections,
+      },
+      recentMedia,
+      recentActivity: auditLogs,
     },
-    recentMedia,
-    recentActivity: auditLogs,
-  });
+    {
+      headers: {
+        'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+      },
+    }
+  );
 }

@@ -12,6 +12,15 @@ const nextConfig = {
       },
     ],
   },
+  webpack: (config, { dev }) => {
+    if (dev) {
+      // Use in-memory cache in dev to avoid Windows/OneDrive filesystem rename locks (.pack.gz)
+      config.cache = {
+        type: 'memory',
+      };
+    }
+    return config;
+  },
   async headers() {
     if (isDev) {
       return [];

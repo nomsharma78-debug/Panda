@@ -12,7 +12,6 @@ import {
   Search,
   ShieldCheck,
   Database,
-  Lock,
 } from 'lucide-react';
 import { VaultItemCard } from './VaultItemCard';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -22,16 +21,28 @@ import { useAuth } from '@/components/context/AuthContext';
 import { useToast } from '@/components/context/ToastContext';
 import { decryptClientVaultItem } from '@/lib/crypto/client-vault';
 import { pandaCache } from '@/lib/client-cache';
+import { useCustomEvent } from '@/hooks/useCustomEvent';
+import { useDebounce } from '@/hooks/useDebounce';
+import { PANDA_EVENTS, VAULT_TYPES } from '@/lib/constants/index';
 
-export function VaultManager({ initialType = 'all', onOpenAddModal }) {
+const TABS = [
+  { id: VAULT_TYPES.ALL, label: 'All Items', icon: Layers },
+  { id: VAULT_TYPES.LOGIN, label: 'Passwords', icon: KeyRound },
+  { id: VAULT_TYPES.CARD, label: 'Cards', icon: CreditCard },
+  { id: VAULT_TYPES.NOTE, label: 'Secure Notes', icon: FileText },
+  { id: VAULT_TYPES.IDENTITY, label: 'Identities', icon: UserCheck },
+];
+
+export function VaultManager({ initialType = VAULT_TYPES.ALL, onOpenAddModal }) {
   const router = useRouter();
   const { session, clientCryptoKey } = useAuth();
   const { success, error: toastError } = useToast();
 
   const [activeTab, setActiveTab] = useState(initialType);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const debouncedSearch = useDebounce(searchInput, 200);
 
-  const cacheKey = activeTab === 'all' ? 'vault:all' : `vault:${activeTab}`;
+  const cacheKey = activeTab === VAULT_TYPES.ALL ? 'vault:all' : `vault:${activeTab}`;
   const cached = pandaCache.get(cacheKey);
 
   const [items, setItems] = useState(cached?.items || []);
@@ -49,15 +60,14 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
 
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
-    if (tabId === 'all') {
-      router.push('/vault');
-    } else {
-      router.push(`/vault?type=${tabId}`);
-    }
+    try {
+      const newUrl = tabId === VAULT_TYPES.ALL ? '/vault' : `/vault?type=${tabId}`;
+      window.history.replaceState(null, '', newUrl);
+    } catch {}
   };
 
   const fetchItems = useCallback(async (force = false) => {
-    const currentKey = activeTab === 'all' ? 'vault:all' : `vault:${activeTab}`;
+    const currentKey = 'vault:all';
     if (!force) {
       const cachedData = pandaCache.get(currentKey);
       if (cachedData) {
@@ -69,13 +79,12 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
     }
 
     try {
-      const url = activeTab === 'all' ? '/api/vault' : `/api/vault?type=${activeTab}`;
       const headers = {};
       if (session?.access_token) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const res = await fetch(url, { headers, credentials: 'include' });
+      const res = await fetch('/api/vault', { headers, credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         const rawItems = data.items || [];
@@ -100,7 +109,7 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
               } else {
                 decrypted[item.id] = { title: `${item.type} Item (Encrypted)` };
               }
-            } catch (e) {
+            } catch {
               decrypted[item.id] = { title: `${item.type} Item` };
             }
           }
@@ -115,7 +124,7 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, clientCryptoKey, session?.access_token]);
+  }, [clientCryptoKey, session?.access_token]);
 
   useEffect(() => {
     fetchItems(false);
@@ -123,9 +132,7 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
 
   // Silent background revalidation on window focus and interval (0ms interruption)
   useEffect(() => {
-    const handleFocus = () => {
-      fetchItems(true);
-    };
+    const handleFocus = () => fetchItems(true);
     window.addEventListener('focus', handleFocus);
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
@@ -139,14 +146,13 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
     };
   }, [fetchItems]);
 
-  useEffect(() => {
-    const handleVaultUpdated = () => {
-      pandaCache.invalidatePrefix('vault:');
-      fetchItems(true);
-    };
-    window.addEventListener('panda:vault:updated', handleVaultUpdated);
-    return () => window.removeEventListener('panda:vault:updated', handleVaultUpdated);
+  // Clean custom event listener using hook
+  const handleVaultUpdated = useCallback(() => {
+    pandaCache.invalidatePrefix('vault:');
+    fetchItems(true);
   }, [fetchItems]);
+
+  useCustomEvent(PANDA_EVENTS.VAULT_UPDATED, handleVaultUpdated);
 
   const handleDeleteItem = async () => {
     if (!deleteTarget) return;
@@ -167,53 +173,51 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
         success('Item deleted successfully');
         setItems((prev) => prev.filter((i) => i.id !== deleteTarget.id));
         setDeleteTarget(null);
-        window.dispatchEvent(new CustomEvent('panda:vault:updated'));
+        window.dispatchEvent(new CustomEvent(PANDA_EVENTS.VAULT_UPDATED));
       } else {
         toastError('Failed to delete item');
       }
-    } catch (err) {
+    } catch {
       toastError('Network error deleting item');
     } finally {
       setIsDeleting(false);
     }
   };
 
-  // Filter items by client-side search query
+  // Filter items by active tab category and debounced search query (0ms instant)
   const filteredItems = useMemo(() => {
-    if (!searchQuery.trim()) return items;
-    const q = searchQuery.toLowerCase();
-    return items.filter((item) => {
-      const data = decryptedMap[item.id] || {};
-      const title = (data.title || '').toLowerCase();
-      const username = (data.username || '').toLowerCase();
-      const notes = (data.notes || data.content || '').toLowerCase();
-      const url = (data.url || '').toLowerCase();
-      return title.includes(q) || username.includes(q) || notes.includes(q) || url.includes(q);
-    });
-  }, [items, decryptedMap, searchQuery]);
-
-  const tabs = [
-    { id: 'all', label: 'All Items', icon: Layers },
-    { id: 'login', label: 'Passwords', icon: KeyRound },
-    { id: 'card', label: 'Cards', icon: CreditCard },
-    { id: 'note', label: 'Secure Notes', icon: FileText },
-    { id: 'identity', label: 'Identities', icon: UserCheck },
-  ];
+    let list = items;
+    if (activeTab !== VAULT_TYPES.ALL) {
+      list = list.filter((item) => (item.type || '').toLowerCase() === activeTab.toLowerCase());
+    }
+    if (debouncedSearch && debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase().trim();
+      list = list.filter((item) => {
+        const data = decryptedMap[item.id] || {};
+        const title = (data.title || item.title || item.name || '').toLowerCase();
+        const username = (data.username || data.email || '').toLowerCase();
+        const notes = (data.notes || data.content || '').toLowerCase();
+        const url = (data.url || item.url || '').toLowerCase();
+        return title.includes(q) || username.includes(q) || notes.includes(q) || url.includes(q);
+      });
+    }
+    return list;
+  }, [items, activeTab, decryptedMap, debouncedSearch]);
 
   const getEmptyStateDetails = () => {
-    if (searchQuery) {
+    if (debouncedSearch) {
       return {
         icon: Search,
         title: 'No matching items found',
-        description: `No vault items matched "${searchQuery}". Try a different search keyword.`,
+        description: `No vault items matched "${debouncedSearch}". Try a different search keyword.`,
         actionLabel: 'Clear Search',
         actionIcon: Plus,
-        onAction: () => setSearchQuery(''),
+        onAction: () => setSearchInput(''),
       };
     }
 
     switch (activeTab) {
-      case 'login':
+      case VAULT_TYPES.LOGIN:
         return {
           icon: KeyRound,
           title: 'No passwords saved yet',
@@ -222,7 +226,7 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
           actionIcon: Plus,
           onAction: () => onOpenAddModal('login'),
         };
-      case 'card':
+      case VAULT_TYPES.CARD:
         return {
           icon: CreditCard,
           title: 'No payment cards saved yet',
@@ -231,7 +235,7 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
           actionIcon: Plus,
           onAction: () => onOpenAddModal('card'),
         };
-      case 'note':
+      case VAULT_TYPES.NOTE:
         return {
           icon: FileText,
           title: 'No secure notes saved yet',
@@ -240,7 +244,7 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
           actionIcon: Plus,
           onAction: () => onOpenAddModal('note'),
         };
-      case 'identity':
+      case VAULT_TYPES.IDENTITY:
         return {
           icon: UserCheck,
           title: 'No identities saved yet',
@@ -282,7 +286,7 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-800/80">
         {/* Category Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-          {tabs.map((tab) => {
+          {TABS.map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
             return (
@@ -308,8 +312,8 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
               type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Filter items..."
               className="w-full bg-slate-900/90 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-teal-500/80 focus:ring-1 focus:ring-teal-500/20"
             />
@@ -319,7 +323,7 @@ export function VaultManager({ initialType = 'all', onOpenAddModal }) {
             variant="primary"
             size="sm"
             icon={Plus}
-            onClick={() => onOpenAddModal(activeTab === 'all' ? 'login' : activeTab)}
+            onClick={() => onOpenAddModal(activeTab === VAULT_TYPES.ALL ? 'login' : activeTab)}
             className="rounded-xl shrink-0"
           >
             <span>Add Item</span>

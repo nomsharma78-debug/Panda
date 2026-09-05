@@ -28,6 +28,19 @@ import { StorageHowItWorksModal } from '@/components/storage/StorageHowItWorksMo
 import { useToast } from '@/components/context/ToastContext';
 import { useAuth } from '@/components/context/AuthContext';
 import { pandaCache } from '@/lib/client-cache';
+import { useCustomEvent } from '@/hooks/useCustomEvent';
+import { useDebounce } from '@/hooks/useDebounce';
+import { PANDA_EVENTS, MEDIA_CATEGORIES } from '@/lib/constants/index';
+
+const FILTER_TABS = [
+  { id: MEDIA_CATEGORIES.ALL, label: 'All Files', icon: Layers },
+  { id: MEDIA_CATEGORIES.PHOTO, label: 'Photos', icon: ImageIcon },
+  { id: MEDIA_CATEGORIES.VIDEO, label: 'Videos', icon: Film },
+  { id: MEDIA_CATEGORIES.CDR, label: 'CDR Vector', icon: Palette },
+  { id: MEDIA_CATEGORIES.PDF, label: 'PDFs', icon: FileText },
+  { id: MEDIA_CATEGORIES.DOCUMENT, label: 'Documents', icon: FileText },
+  { id: MEDIA_CATEGORIES.ARCHIVE, label: 'Archives', icon: Archive },
+];
 
 // Granular list reconciliation helper to preserve object identities and prevent redundant re-renders
 function reconcileMediaItems(prevList, incomingList) {
@@ -85,8 +98,9 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   // Only show skeleton on initial load if no cached data exists
   const [loading, setLoading] = useState(!hasValidCache);
   const [firstLoadDone, setFirstLoadDone] = useState(hasValidCache);
-  const [activeFilter, setActiveFilter] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState(MEDIA_CATEGORIES.ALL);
+  const [searchInput, setSearchInput] = useState('');
+  const debouncedSearch = useDebounce(searchInput, 250);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
 
@@ -136,10 +150,10 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   // Fast fetch media with smart SWR caching
   const fetchContent = useCallback(
     async (opts = {}) => {
-      const { filter = activeFilter, search = searchQuery, sync = false, force = false, silent = false } = opts;
+      const { sync = false, force = false, silent = false } = opts;
 
       // Render instantly from memory cache to avoid loading flash
-      if (!force && !sync && !search && filter === 'all') {
+      if (!force && !sync) {
         const cached = pandaCache.get('media:list');
         if (cached && Array.isArray(cached) && cached.length > 0) {
           setMediaList((prev) => reconcileMediaItems(prev, cached));
@@ -151,8 +165,6 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
 
       try {
         const params = new URLSearchParams();
-        if (filter !== 'all') params.set('type', filter);
-        if (search) params.set('search', search);
         if (sync) params.set('sync', 'true');
         if (session?.access_token) params.set('token', session.access_token);
 
@@ -166,9 +178,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
           const data = await mediaRes.json();
           const newItems = data.items || [];
           setMediaList((prev) => reconcileMediaItems(prev, newItems));
-          if (filter === 'all' && !search) {
-            pandaCache.set('media:list', newItems, 120_000);
-          }
+          pandaCache.set('media:list', newItems, 120_000);
         }
       } catch (err) {
         console.error('[MediaGallery] Fetch content error:', err);
@@ -180,14 +190,14 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         }
       }
     },
-    [activeFilter, searchQuery, session?.access_token]
+    [session?.access_token]
   );
 
-  // Load content on mount and whenever auth token, filter, or search changes
+  // Load content on mount and whenever auth token changes
   useEffect(() => {
     checkStorage(false);
     fetchContent();
-  }, [session?.access_token, activeFilter, searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session?.access_token, checkStorage, fetchContent]);
 
   // Silent background revalidation on window focus and tab visibility (0ms interruption, zero flicker)
   useEffect(() => {
@@ -217,34 +227,27 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     };
   }, [fetchContent]);
 
-  // Listen to global upload/storage events
-  useEffect(() => {
-    const handleMediaUploaded = (e) => {
-      if (e?.detail?.newItems && Array.isArray(e.detail.newItems) && e.detail.newItems.length > 0) {
-        const newItems = e.detail.newItems;
-        setMediaList((prev) => {
-          const existingIds = new Set(prev.map((m) => m.id));
-          const toAdd = newItems.filter((m) => !existingIds.has(m.id));
-          return [...toAdd, ...prev];
-        });
-      }
-      pandaCache.invalidate('media:list');
-      fetchContent({ silent: true, force: true });
-    };
+  // Clean custom event hooks for reactive updates
+  const handleMediaUploaded = useCallback((detail) => {
+    if (detail?.newItems && Array.isArray(detail.newItems) && detail.newItems.length > 0) {
+      const newItems = detail.newItems;
+      setMediaList((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        const toAdd = newItems.filter((m) => !existingIds.has(m.id));
+        return [...toAdd, ...prev];
+      });
+    }
+    pandaCache.invalidate('media:list');
+    fetchContent({ silent: true, force: true });
+  }, [fetchContent]);
 
-    const handleStorageUpdated = () => {
-      pandaCache.invalidate('storage:connections');
-      checkStorage(true);
-    };
+  const handleStorageUpdated = useCallback(() => {
+    pandaCache.invalidate('storage:connections');
+    checkStorage(true);
+  }, [checkStorage]);
 
-    window.addEventListener('panda:media:uploaded', handleMediaUploaded);
-    window.addEventListener('panda:storage:updated', handleStorageUpdated);
-    return () => {
-      window.removeEventListener('panda:media:uploaded', handleMediaUploaded);
-      window.removeEventListener('panda:storage:updated', handleStorageUpdated);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useCustomEvent(PANDA_EVENTS.MEDIA_UPLOADED, handleMediaUploaded);
+  useCustomEvent(PANDA_EVENTS.STORAGE_UPDATED, handleStorageUpdated);
 
   // Explicit cloud storage sync handler (non-blocking, zero screen flicker, zero media wipe)
   const handleSync = async () => {
@@ -256,7 +259,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       pandaCache.invalidate('storage:metrics');
       await fetchContent({ sync: true, force: true, silent: true });
       await checkStorage(true);
-      window.dispatchEvent(new CustomEvent('panda:storage:updated'));
+      window.dispatchEvent(new CustomEvent(PANDA_EVENTS.STORAGE_UPDATED));
       success('Cloud storage synchronized.');
     } catch (err) {
       console.error('[MediaGallery] Sync error:', err);
@@ -266,30 +269,209 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     }
   };
 
-  // Date grouping utility
+  // Category count calculation for live badge indicators
+  const categoryCounts = useMemo(() => {
+    const counts = { [MEDIA_CATEGORIES.ALL]: mediaList.length };
+    mediaList.forEach((item) => {
+      const type = (item.media_type || item.mediaType || '').toLowerCase();
+      const mime = (item.mime_type || item.mimeType || item.content_type || '').toLowerCase();
+      const name = (item.original_filename || item.filename || item.name || '').toLowerCase();
+      const ext = name.split('.').pop() || '';
+
+      if (
+        type === 'photo' ||
+        type === 'image' ||
+        mime.startsWith('image/') ||
+        ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'avif', 'heic', 'ico', 'tiff', 'tif'].includes(ext)
+      ) {
+        counts[MEDIA_CATEGORIES.PHOTO] = (counts[MEDIA_CATEGORIES.PHOTO] || 0) + 1;
+      } else if (
+        type === 'video' ||
+        mime.startsWith('video/') ||
+        ['mp4', 'webm', 'mov', 'avi', 'mkv', 'm4v', '3gp', 'flv', 'wmv'].includes(ext)
+      ) {
+        counts[MEDIA_CATEGORIES.VIDEO] = (counts[MEDIA_CATEGORIES.VIDEO] || 0) + 1;
+      } else if (
+        type === 'cdr' ||
+        ext === 'cdr' ||
+        mime.includes('coreldraw') ||
+        mime.includes('x-cdr') ||
+        mime.includes('cdr')
+      ) {
+        counts[MEDIA_CATEGORIES.CDR] = (counts[MEDIA_CATEGORIES.CDR] || 0) + 1;
+      } else if (
+        type === 'pdf' ||
+        ext === 'pdf' ||
+        mime.includes('pdf')
+      ) {
+        counts[MEDIA_CATEGORIES.PDF] = (counts[MEDIA_CATEGORIES.PDF] || 0) + 1;
+      } else if (
+        type === 'archive' ||
+        ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'iso'].includes(ext) ||
+        mime.includes('zip') ||
+        mime.includes('tar') ||
+        mime.includes('compressed') ||
+        mime.includes('archive')
+      ) {
+        counts[MEDIA_CATEGORIES.ARCHIVE] = (counts[MEDIA_CATEGORIES.ARCHIVE] || 0) + 1;
+      } else if (
+        type === 'audio' ||
+        mime.startsWith('audio/') ||
+        ['mp3', 'wav', 'ogg', 'aac', 'm4a', 'flac', 'wma'].includes(ext)
+      ) {
+        counts[MEDIA_CATEGORIES.AUDIO] = (counts[MEDIA_CATEGORIES.AUDIO] || 0) + 1;
+      } else {
+        counts[MEDIA_CATEGORIES.DOCUMENT] = (counts[MEDIA_CATEGORIES.DOCUMENT] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [mediaList]);
+
+  // Instant 0ms client-side filtering and search
+  const filteredMedia = useMemo(() => {
+    let list = mediaList;
+    if (activeFilter && activeFilter !== MEDIA_CATEGORIES.ALL && activeFilter !== 'all') {
+      list = list.filter((item) => {
+        const type = (item.media_type || item.mediaType || '').toLowerCase();
+        const mime = (item.mime_type || item.mimeType || item.content_type || '').toLowerCase();
+        const name = (item.original_filename || item.filename || item.name || '').toLowerCase();
+        const ext = name.split('.').pop() || '';
+
+        if (
+          activeFilter === MEDIA_CATEGORIES.PHOTO ||
+          activeFilter === 'photo' ||
+          activeFilter === 'photos' ||
+          activeFilter === 'image' ||
+          activeFilter === 'images'
+        ) {
+          return (
+            type === 'photo' ||
+            type === 'image' ||
+            mime.startsWith('image/') ||
+            ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'avif', 'heic', 'ico', 'tiff', 'tif'].includes(ext)
+          );
+        }
+
+        if (
+          activeFilter === MEDIA_CATEGORIES.VIDEO ||
+          activeFilter === 'video' ||
+          activeFilter === 'videos'
+        ) {
+          return (
+            type === 'video' ||
+            mime.startsWith('video/') ||
+            ['mp4', 'webm', 'mov', 'avi', 'mkv', 'm4v', '3gp', 'flv', 'wmv'].includes(ext)
+          );
+        }
+
+        if (
+          activeFilter === MEDIA_CATEGORIES.CDR ||
+          activeFilter === 'cdr'
+        ) {
+          return (
+            type === 'cdr' ||
+            ext === 'cdr' ||
+            mime.includes('coreldraw') ||
+            mime.includes('x-cdr') ||
+            mime.includes('cdr')
+          );
+        }
+
+        if (
+          activeFilter === MEDIA_CATEGORIES.PDF ||
+          activeFilter === 'pdf' ||
+          activeFilter === 'pdfs'
+        ) {
+          return (
+            type === 'pdf' ||
+            ext === 'pdf' ||
+            mime.includes('pdf')
+          );
+        }
+
+        if (
+          activeFilter === MEDIA_CATEGORIES.DOCUMENT ||
+          activeFilter === 'document' ||
+          activeFilter === 'documents'
+        ) {
+          return (
+            type === 'document' ||
+            ['doc', 'docx', 'txt', 'rtf', 'odt', 'ods', 'xlsx', 'xls', 'csv', 'pptx', 'ppt', 'md', 'json', 'xml'].includes(ext) ||
+            mime.includes('word') ||
+            mime.includes('text') ||
+            mime.includes('document') ||
+            mime.includes('sheet') ||
+            mime.includes('presentation')
+          );
+        }
+
+        if (
+          activeFilter === MEDIA_CATEGORIES.ARCHIVE ||
+          activeFilter === 'archive' ||
+          activeFilter === 'archives'
+        ) {
+          return (
+            type === 'archive' ||
+            ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'iso'].includes(ext) ||
+            mime.includes('zip') ||
+            mime.includes('tar') ||
+            mime.includes('compressed') ||
+            mime.includes('archive')
+          );
+        }
+
+        if (
+          activeFilter === MEDIA_CATEGORIES.AUDIO ||
+          activeFilter === 'audio'
+        ) {
+          return (
+            type === 'audio' ||
+            mime.startsWith('audio/') ||
+            ['mp3', 'wav', 'ogg', 'aac', 'm4a', 'flac', 'wma'].includes(ext)
+          );
+        }
+
+        return type === activeFilter;
+      });
+    }
+
+    if (debouncedSearch && debouncedSearch.trim()) {
+      const q = debouncedSearch.trim().toLowerCase();
+      list = list.filter((item) => {
+        const name = (item.original_filename || item.filename || item.name || '').toLowerCase();
+        return name.includes(q);
+      });
+    }
+
+    return list;
+  }, [mediaList, activeFilter, debouncedSearch]);
+
+  // Date grouping utility based on filteredMedia
   const groupedMedia = useMemo(() => {
     const groups = {};
 
-    mediaList.forEach((item) => {
-      const dateObj = new Date(item.uploaded_at || item.created_at);
-      const now = new Date();
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
 
-      const isToday =
-        dateObj.getDate() === now.getDate() &&
-        dateObj.getMonth() === now.getMonth() &&
-        dateObj.getFullYear() === now.getFullYear();
+    const startOfYesterday = new Date(startOfToday);
+    startOfYesterday.setDate(startOfToday.getDate() - 1);
 
-      const yesterday = new Date(now);
-      yesterday.setDate(now.getDate() - 1);
-      const isYesterday =
-        dateObj.getDate() === yesterday.getDate() &&
-        dateObj.getMonth() === yesterday.getMonth() &&
-        dateObj.getFullYear() === yesterday.getFullYear();
+    const startOfTomorrow = new Date(startOfToday);
+    startOfTomorrow.setDate(startOfToday.getDate() + 1);
+
+    filteredMedia.forEach((item) => {
+      const rawDate = item.uploaded_at || item.created_at || item.uploadedAt || item.createdAt;
+      const dateObj = new Date(rawDate);
+      if (isNaN(dateObj.getTime())) {
+        if (!groups['Earlier']) groups['Earlier'] = [];
+        groups['Earlier'].push(item);
+        return;
+      }
 
       let label = '';
-      if (isToday) {
+      if (dateObj >= startOfToday && dateObj < startOfTomorrow) {
         label = 'Today';
-      } else if (isYesterday) {
+      } else if (dateObj >= startOfYesterday && dateObj < startOfToday) {
         label = 'Yesterday';
       } else {
         label = dateObj.toLocaleDateString(undefined, {
@@ -304,7 +486,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     });
 
     return groups;
-  }, [mediaList]);
+  }, [filteredMedia]);
 
   const toggleSelect = (id) => {
     setSelectedIds((prev) => {
@@ -316,15 +498,15 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
   };
 
   const selectAll = () => {
-    if (selectedIds.size === mediaList.length) {
+    if (selectedIds.size === filteredMedia.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(mediaList.map((m) => m.id)));
+      setSelectedIds(new Set(filteredMedia.map((m) => m.id)));
     }
   };
 
   const handleOpenLightbox = (item) => {
-    const idx = mediaList.findIndex((m) => m.id === item.id);
+    const idx = filteredMedia.findIndex((m) => m.id === item.id);
     if (idx !== -1) {
       setLightboxIndex(idx);
       setLightboxOpen(true);
@@ -379,7 +561,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       }
       setDeleteTarget(null);
       fetchContent({ silent: true, force: true });
-      window.dispatchEvent(new CustomEvent('panda:storage:updated'));
+      window.dispatchEvent(new CustomEvent(PANDA_EVENTS.STORAGE_UPDATED));
     } catch {
       toastError('Network error deleting files');
     } finally {
@@ -393,16 +575,6 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       window.open(`/api/media/${id}/download`, '_blank');
     }
   };
-
-  const filterTabs = [
-    { id: 'all', label: 'All Files', icon: Layers },
-    { id: 'photo', label: 'Photos', icon: ImageIcon },
-    { id: 'video', label: 'Videos', icon: Film },
-    { id: 'cdr', label: 'CDR Vector', icon: Palette },
-    { id: 'pdf', label: 'PDFs', icon: FileText },
-    { id: 'document', label: 'Documents', icon: FileText },
-    { id: 'archive', label: 'Archives', icon: Archive },
-  ];
 
   const handleUploadClick = () => {
     if (!hasStorage) {
@@ -418,9 +590,10 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
         {/* Filter Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full scrollbar-none">
-          {filterTabs.map((tab) => {
+          {FILTER_TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeFilter === tab.id;
+            const count = categoryCounts[tab.id] || 0;
             return (
               <button
                 key={tab.id}
@@ -433,6 +606,15 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
               >
                 <Icon className="w-3.5 h-3.5" />
                 <span>{tab.label}</span>
+                {count > 0 && (
+                  <span
+                    className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full leading-tight ${
+                      isActive ? 'bg-slate-950/20 text-slate-950 font-bold' : 'bg-slate-800/80 text-slate-400'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -445,8 +627,8 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
             <input
               type="text"
               placeholder="Search library..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="w-full bg-slate-900 border border-slate-800 rounded-2xl pl-10 pr-4 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500"
             />
           </div>
@@ -464,7 +646,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
             </Button>
           )}
 
-          {mediaList.length > 0 && (
+          {filteredMedia.length > 0 && (
             <Button
               variant={isSelectionMode ? 'primary' : 'outline'}
               size="sm"
@@ -504,7 +686,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
             >
               <CheckSquare className="w-4 h-4" />
               <span>
-                {selectedIds.size === mediaList.length ? 'Deselect All' : 'Select All'} ({selectedIds.size})
+                {selectedIds.size === filteredMedia.length ? 'Deselect All' : 'Select All'} ({selectedIds.size})
               </span>
             </button>
           </div>
@@ -530,13 +712,10 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* MAIN GALLERY VIEW / ONBOARDING VIEW */}
-      {/* ========================================================================= */}
+      {/* Main Gallery View / Onboarding View */}
       {loading || (!firstLoadDone && mediaList.length === 0) ? (
         <MediaGridSkeleton count={12} />
       ) : !hasStorage && mediaList.length === 0 ? (
-        /* ONBOARDING STATE WHEN ZERO STORAGE CONNECTED */
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 sm:p-12 text-center max-w-2xl mx-auto shadow-card space-y-6 animate-slide-up">
           <div className="w-16 h-16 rounded-3xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center mx-auto text-teal-400">
             <Cloud className="w-8 h-8" />
@@ -578,7 +757,6 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
           </div>
         </div>
       ) : mediaList.length === 0 ? (
-        /* EMPTY STATE */
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 sm:p-12 text-center max-w-xl mx-auto shadow-card space-y-4">
           <div className="w-12 h-12 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center mx-auto text-teal-400">
             <ImageIcon className="w-6 h-6" />
@@ -595,8 +773,36 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
             </Button>
           </div>
         </div>
+      ) : filteredMedia.length === 0 ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 sm:p-12 text-center max-w-xl mx-auto shadow-card space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center mx-auto text-teal-400">
+            <ImageIcon className="w-6 h-6" />
+          </div>
+          <div>
+            <h4 className="text-base font-bold text-white">No matching files found</h4>
+            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+              {searchInput
+                ? `No items found matching "${searchInput}".`
+                : `No ${activeFilter} found in your library.`}
+            </p>
+          </div>
+          <div className="pt-2 flex justify-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setActiveFilter(MEDIA_CATEGORIES.ALL);
+                setSearchInput('');
+              }}
+            >
+              Show All Media
+            </Button>
+            <Button variant="primary" size="sm" icon={Upload} onClick={handleUploadClick}>
+              Upload File
+            </Button>
+          </div>
+        </div>
       ) : (
-        /* MEDIA FILES GROUPED BY DATE */
         <div className="space-y-8">
           {Object.entries(groupedMedia).map(([dateLabel, items]) => (
             <div key={dateLabel} className="space-y-3">
@@ -631,17 +837,17 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         </div>
       )}
 
-      {/* LIGHTBOX FOR PHOTO / VIDEO / PDF PREVIEW */}
+      {/* Lightbox Modal */}
       <MediaLightbox
         isOpen={lightboxOpen}
         onClose={() => setLightboxOpen(false)}
-        mediaList={mediaList}
+        mediaList={filteredMedia}
         currentIndex={lightboxIndex}
         onIndexChange={(idx) => setLightboxIndex(idx)}
         onDelete={(item) => setDeleteTarget(item)}
       />
 
-      {/* HOW IT WORKS MODAL */}
+      {/* How It Works Modal */}
       <StorageHowItWorksModal
         isOpen={howItWorksOpen}
         onClose={() => setHowItWorksOpen(false)}
@@ -651,7 +857,7 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
         }}
       />
 
-      {/* DELETE CONFIRMATION MODAL */}
+      {/* Delete Confirmation Modal */}
       <ConfirmDialog
         isOpen={!!deleteTarget}
         title={deleteTarget === 'bulk' ? `Delete ${selectedIds.size} files?` : 'Delete media file?'}
@@ -665,4 +871,3 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
     </div>
   );
 }
-

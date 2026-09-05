@@ -2,7 +2,12 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@/hooks/*": ["./hooks/*"],
+      "@/constants/*": ["./lib/constants/*"],
+      "@/utils/*": ["./lib/utils/*"],
+      "@/lib/*": ["./lib/*"],
+      "@/components/*": ["./components/*"]
     },
     "jsx": "preserve",
     "checkJs": false

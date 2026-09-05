@@ -1,22 +1,23 @@
-import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/auth/session';
 import {
   listUserStorageConnections,
   createStorageConnection,
   getCombinedStorageMetrics,
-  getStorageConnectionInternal,
-  updateStorageUsage,
 } from '@/lib/db/storage';
 import { encryptData } from '@/lib/crypto/encryption';
 import { validateStorageInput } from '@/lib/validation/schemas';
 import { StorageManager } from '@/lib/storage/storage-manager';
 import { logAuditEvent } from '@/lib/security/audit';
 import { getClientIp } from '@/lib/security/rate-limit';
+import { jsonSuccess, jsonError, jsonBadRequest, jsonUnauthorized, handleApiError } from '@/lib/api/response';
+import { logger } from '@/lib/utils/logger';
+
+const storageLogger = logger.child('StorageAPI');
 
 export async function GET(request) {
   const authData = await getAuthenticatedUser(request);
   if (!authData) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return jsonUnauthorized();
   }
 
   const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
@@ -28,47 +29,59 @@ export async function GET(request) {
       try {
         await StorageManager.syncStorageMedia(authData.user.id, token);
       } catch (syncErr) {
-        console.warn('[Storage GET sync notice]:', syncErr.message);
+        storageLogger.warn(`Sync warning: ${syncErr.message}`);
       }
     }
 
-    const [connections, combined] = await Promise.all([
+    let [connections, combined] = await Promise.all([
       listUserStorageConnections(authData.user.id, token),
       getCombinedStorageMetrics(authData.user.id, token),
     ]);
 
-    return NextResponse.json({
+    // Auto-discover if storage is connected but zero files/bytes registered
+    if (
+      (!combined?.usedBytes || combined.usedBytes === 0 || (connections && connections.length > 0 && connections.every(c => (c.used_bytes || 0) === 0))) &&
+      (connections && connections.length > 0)
+    ) {
+      try {
+        const synced = await StorageManager.syncStorageMedia(authData.user.id, token);
+        if (synced && synced.length > 0) {
+          [connections, combined] = await Promise.all([
+            listUserStorageConnections(authData.user.id, token),
+            getCombinedStorageMetrics(authData.user.id, token),
+          ]);
+        }
+      } catch {}
+    }
+
+    return jsonSuccess({
       connections: connections || [],
       combined: combined || null,
     });
   } catch (err) {
-    console.error('List storage connections error:', err);
-    return NextResponse.json({ error: 'Failed to retrieve storage connections' }, { status: 500 });
+    return handleApiError(err, 'ListStorageConnections');
   }
 }
 
 export async function POST(request) {
   const authData = await getAuthenticatedUser(request);
   if (!authData) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return jsonUnauthorized();
   }
 
   try {
     const body = await request.json();
     const validation = validateStorageInput(body);
     if (!validation.valid) {
-      return NextResponse.json({ error: validation.message }, { status: 400 });
+      return jsonBadRequest(validation.message);
     }
 
     // Enforce live connection test before saving credentials
     const testResult = await StorageManager.testCandidateConfig(body);
     if (!testResult.success) {
-      return NextResponse.json(
-        {
-          error: testResult.error || 'Could not verify storage credentials. Please check your bucket details and try again.',
-          checks: testResult.checks,
-        },
-        { status: 400 }
+      return jsonBadRequest(
+        testResult.error || 'Could not verify storage credentials. Please check your bucket details and try again.',
+        { checks: testResult.checks }
       );
     }
 
@@ -114,15 +127,14 @@ export async function POST(request) {
       },
     });
 
-    return NextResponse.json(
+    return jsonSuccess(
       {
         connection,
         message: 'Storage connection tested, connected, and synchronized successfully.',
       },
-      { status: 201 }
+      201
     );
   } catch (err) {
-    console.error('Save storage connection error:', err);
-    return NextResponse.json({ error: err.message || 'Failed to connect storage provider' }, { status: 500 });
+    return handleApiError(err, 'CreateStorageConnection');
   }
 }

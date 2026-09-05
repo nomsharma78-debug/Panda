@@ -1,9 +1,10 @@
-import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/auth/session';
 import { listVaultItems, createVaultItem } from '@/lib/db/vault';
 import { logAuditEvent } from '@/lib/security/audit';
 import { getClientIp } from '@/lib/security/rate-limit';
 import { encryptData, decryptData } from '@/lib/crypto/encryption';
+import { jsonSuccess, jsonBadRequest, jsonUnauthorized, handleApiError } from '@/lib/api/response';
+import { VAULT_TYPES } from '@/lib/constants/vault';
 
 function extractUserToken(request) {
   const authHeader = request.headers.get ? request.headers.get('authorization') : request.headers?.authorization;
@@ -16,7 +17,7 @@ function extractUserToken(request) {
 export async function GET(request) {
   const authData = await getAuthenticatedUser(request);
   if (!authData) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return jsonUnauthorized();
   }
 
   const userToken = extractUserToken(request);
@@ -43,17 +44,16 @@ export async function GET(request) {
       };
     });
 
-    return NextResponse.json({ items: processedItems });
+    return jsonSuccess({ items: processedItems });
   } catch (err) {
-    console.error('List vault items error:', err);
-    return NextResponse.json({ error: 'Failed to retrieve vault items' }, { status: 500 });
+    return handleApiError(err, 'ListVaultItems');
   }
 }
 
 export async function POST(request) {
   const authData = await getAuthenticatedUser(request);
   if (!authData) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return jsonUnauthorized();
   }
 
   const userToken = extractUserToken(request);
@@ -63,12 +63,12 @@ export async function POST(request) {
     const { type, encryptedPayload } = body || {};
 
     if (!type || !encryptedPayload) {
-      return NextResponse.json({ error: 'Item type and encrypted payload are required' }, { status: 400 });
+      return jsonBadRequest('Item type and encrypted payload are required');
     }
 
-    const validTypes = ['login', 'card', 'note', 'identity'];
+    const validTypes = Object.values(VAULT_TYPES).filter((t) => t !== VAULT_TYPES.ALL);
     if (!validTypes.includes(type.toLowerCase())) {
-      return NextResponse.json({ error: `Invalid vault item type. Valid: ${validTypes.join(', ')}` }, { status: 400 });
+      return jsonBadRequest(`Invalid vault item type. Valid: ${validTypes.join(', ')}`);
     }
 
     // Ensure payload is ALWAYS encrypted with AES-256-GCM before writing to database
@@ -110,9 +110,8 @@ export async function POST(request) {
       metadata: { itemId: item.id, itemType: item.type },
     });
 
-    return NextResponse.json({ item, message: 'Vault item encrypted and saved securely' }, { status: 201 });
+    return jsonSuccess({ item, message: 'Vault item encrypted and saved securely' }, 201);
   } catch (err) {
-    console.error('Create vault item error:', err);
-    return NextResponse.json({ error: err.message || 'Failed to save vault item' }, { status: 500 });
+    return handleApiError(err, 'CreateVaultItem');
   }
 }

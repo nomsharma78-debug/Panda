@@ -63,13 +63,24 @@ export const MediaCard = React.memo(function MediaCard({
   const downloadUrl = targetMedia.downloadUrl || (targetMedia.id ? `/api/media/${targetMedia.id}/download${tokenParam}` : '');
 
   const [blobUrl, setBlobUrl] = useState(cachedUrl);
+  const [resolvedMime, setResolvedMime] = useState(null);
   const [imgLoading, setImgLoading] = useState(!cachedUrl && (isPhoto || isVideo));
   const [imgError, setImgError] = useState(null);
   const retryCountRef = useRef(0);
 
+  const effectiveIsVideo =
+    isVideo ||
+    (resolvedMime && resolvedMime.startsWith('video/'));
+
+  const effectiveIsPhoto =
+    !effectiveIsVideo &&
+    !isPdf &&
+    !isCdr &&
+    (isPhoto || (resolvedMime && resolvedMime.startsWith('image/')));
+
   // Fetch media binary as blob for stable, reliable decrypted display
   const loadMediaBinary = useCallback(() => {
-    if ((!isPhoto && !isVideo) || !targetMedia.id) {
+    if (!targetMedia.id) {
       setBlobUrl(null);
       setImgLoading(false);
       return () => {};
@@ -105,10 +116,15 @@ export const MediaCard = React.memo(function MediaCard({
           const errText = await res.text().catch(() => '');
           throw new Error(`${res.status} ${errText.slice(0, 50)}`);
         }
-        return res.blob();
+        const contentType = res.headers.get('content-type') || '';
+        const blob = await res.blob();
+        return { blob, contentType };
       })
-      .then((blob) => {
+      .then(({ blob, contentType }) => {
         if (!cancelled) {
+          const finalMime = contentType || blob.type || '';
+          if (finalMime) setResolvedMime(finalMime);
+
           const url = URL.createObjectURL(blob);
           mediaBlobCache.set(targetMedia.id, url);
           setBlobUrl(url);
@@ -136,7 +152,7 @@ export const MediaCard = React.memo(function MediaCard({
     return () => {
       cancelled = true;
     };
-  }, [isPhoto, isVideo, targetMedia.id, session?.access_token, authLoading]);
+  }, [targetMedia.id, session?.access_token, authLoading]);
 
   useEffect(() => {
     const cleanup = loadMediaBinary();
@@ -145,7 +161,13 @@ export const MediaCard = React.memo(function MediaCard({
 
   return (
     <div
-      onClick={isSelectionMode ? onToggleSelect : onClick}
+      onClick={(e) => {
+        if (isSelectionMode && typeof onToggleSelect === 'function') {
+          onToggleSelect(targetMedia);
+        } else if (typeof onClick === 'function') {
+          onClick(targetMedia);
+        }
+      }}
       className={`group relative aspect-square w-full rounded-2xl overflow-hidden bg-slate-900 border transition-all duration-200 cursor-pointer select-none flex items-center justify-center ${
         isSelected
           ? 'border-teal-500 ring-2 ring-teal-500/50 shadow-glow-teal'
@@ -153,68 +175,79 @@ export const MediaCard = React.memo(function MediaCard({
       }`}
     >
       {/* Media Thumbnail */}
-      {isPhoto ? (
+      {effectiveIsPhoto ? (
         blobUrl ? (
           <img
             src={blobUrl}
-            alt={targetMedia.original_filename || 'Photo'}
+            alt=""
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            onError={() => {
+              setBlobUrl(null);
+              setImgError('Could not render image');
+            }}
           />
         ) : imgLoading ? (
-          <div className="w-full h-full flex items-center justify-center bg-slate-950">
-            <div className="w-6 h-6 rounded-full border-2 border-teal-500/30 border-t-teal-400 animate-spin" />
-          </div>
-        ) : imgError ? (
-          <div
-            className="flex flex-col items-center justify-center gap-1.5 p-3 text-center cursor-pointer"
-            onClick={(e) => { e.stopPropagation(); setImgError(null); retryCountRef.current = 0; loadMediaBinary(); }}
-            title="Tap to retry"
-          >
-            <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 text-slate-500 flex items-center justify-center">
-              <ImageOff className="w-5 h-5" />
-            </div>
-            <span className="text-[9px] text-slate-500 font-mono leading-tight max-w-full break-all">{imgError}</span>
-            <span className="text-[9px] text-teal-400 font-semibold">Tap to retry</span>
+          <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center bg-slate-950/40">
+            <div className="w-5 h-5 border-2 border-teal-500/30 border-t-teal-400 rounded-full animate-spin mb-2" />
+            <span className="text-[10px] text-slate-500 font-mono">Decrypting...</span>
           </div>
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-slate-950">
-            <div className="w-6 h-6 rounded-full border-2 border-teal-500/30 border-t-teal-400 animate-spin" />
+          <div className="flex flex-col items-center justify-center p-3 text-center">
+            <ImageOff className="w-6 h-6 text-slate-600 mb-1" />
+            <span className="text-[10px] text-slate-400 font-mono">
+              {imgError || 'Decryption Error'}
+            </span>
           </div>
         )
-      ) : isVideo ? (
-        <div className="relative w-full h-full flex items-center justify-center bg-slate-950 group-hover:bg-slate-900 transition-colors">
-          {blobUrl ? (
+      ) : effectiveIsVideo ? (
+        blobUrl ? (
+          <div className="relative w-full h-full flex items-center justify-center bg-black group">
             <video
               src={blobUrl}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              muted
+              playsInline
               preload="metadata"
-              className="w-full h-full object-cover opacity-80 group-hover:opacity-95 transition-opacity"
             />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-slate-950">
-              <div className="w-6 h-6 rounded-full border-2 border-teal-500/30 border-t-teal-400 animate-spin" />
+            <div className="absolute inset-0 bg-black/25 group-hover:bg-black/10 transition-colors flex items-center justify-center pointer-events-none">
+              <div className="w-10 h-10 rounded-full bg-slate-950/80 border border-teal-500/40 text-teal-400 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <Play className="w-4 h-4 ml-0.5 fill-teal-400" />
+              </div>
             </div>
-          )}
-          <div className="absolute w-12 h-12 rounded-full bg-teal-500/90 text-slate-950 flex items-center justify-center shadow-glow-teal group-hover:scale-110 transition-transform pointer-events-none">
-            <Play className="w-5 h-5 fill-slate-950 ml-0.5" />
           </div>
-          <span className="absolute bottom-2.5 right-2.5 px-1.5 py-0.5 rounded-md bg-black/70 backdrop-blur-sm text-[10px] font-mono text-white flex items-center gap-1 pointer-events-none">
-            <Film className="w-3 h-3 text-teal-400" />
-            <span>Video</span>
-          </span>
-        </div>
+        ) : imgLoading ? (
+          <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center bg-slate-950/40">
+            <div className="w-5 h-5 border-2 border-teal-500/30 border-t-teal-400 rounded-full animate-spin mb-2" />
+            <span className="text-[10px] text-slate-500 font-mono">Decrypting video...</span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center p-4 text-center">
+            <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
+              <Film className="w-6 h-6" />
+            </div>
+            <span className="text-[11px] font-mono font-semibold text-slate-300 uppercase tracking-wider">
+              {filename.split('.').pop()?.replace(/enc$/, '') || 'VIDEO'}
+            </span>
+          </div>
+        )
       ) : isPdf ? (
         <div className="flex flex-col items-center justify-center p-4 text-center">
-          <div className="w-12 h-12 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center mb-2 shadow-[0_0_15px_rgba(244,63,94,0.15)]">
+          <div className="w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
             <FileText className="w-6 h-6" />
           </div>
-          <span className="text-[11px] font-mono font-semibold text-rose-300 uppercase tracking-wider">PDF</span>
+          <span className="text-[11px] font-mono font-semibold text-slate-300 uppercase tracking-wider">
+            PDF
+          </span>
+          <span className="text-[9px] text-slate-400 font-medium tracking-tight mt-0.5">
+            Document
+          </span>
         </div>
       ) : isCdr ? (
-        <div className="flex flex-col items-center justify-center p-4 text-center group-hover:scale-105 transition-transform">
-          <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mb-2 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+        <div className="flex flex-col items-center justify-center p-4 text-center">
+          <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
             <Palette className="w-6 h-6" />
           </div>
-          <span className="text-[11px] font-mono font-bold text-emerald-300 uppercase tracking-wider">
+          <span className="text-[11px] font-mono font-semibold text-slate-300 uppercase tracking-wider">
             CDR
           </span>
           <span className="text-[9px] text-slate-400 font-medium tracking-tight mt-0.5">
@@ -232,22 +265,26 @@ export const MediaCard = React.memo(function MediaCard({
         </div>
       )}
 
-      {/* Selection Checkbox Pill */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleSelect();
-        }}
-        className={`absolute top-2.5 left-2.5 w-6 h-6 rounded-lg flex items-center justify-center transition-all z-10 ${
-          isSelected
-            ? 'bg-teal-500 text-slate-950 opacity-100 shadow-md'
-            : 'bg-black/60 border border-white/20 text-transparent hover:border-teal-400 opacity-0 group-hover:opacity-100'
-        }`}
-        aria-label="Select file"
-      >
-        <Check className="w-3.5 h-3.5 stroke-[3]" />
-      </button>
+      {/* Selection Checkbox Pill (only if selection handler or selection mode is active) */}
+      {Boolean(typeof onToggleSelect === 'function' || isSelectionMode) && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (typeof onToggleSelect === 'function') {
+              onToggleSelect(targetMedia);
+            }
+          }}
+          className={`absolute top-2.5 left-2.5 w-6 h-6 rounded-lg flex items-center justify-center transition-all z-10 ${
+            isSelected
+              ? 'bg-teal-500 text-slate-950 opacity-100 shadow-md'
+              : 'bg-black/60 border border-white/20 text-transparent hover:border-teal-400 opacity-0 group-hover:opacity-100'
+          }`}
+          aria-label="Select file"
+        >
+          <Check className="w-3.5 h-3.5 stroke-[3]" />
+        </button>
+      )}
 
       {/* Encrypted Badge Indicator */}
       {targetMedia.encrypted && (

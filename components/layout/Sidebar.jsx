@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -18,10 +18,44 @@ import {
 import { PandaLogo } from '@/components/ui/PandaLogo';
 import { useAuth } from '@/components/context/AuthContext';
 import { Progress, formatBytes } from '@/components/ui/Progress';
+import { pandaCache } from '@/lib/client-cache';
+import { PANDA_EVENTS } from '@/lib/constants/events';
 
 export function Sidebar({ storageMetrics = null }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+
+  const [metrics, setMetrics] = useState(
+    storageMetrics ||
+    pandaCache.get('storage:metrics') ||
+    pandaCache.get('storage:connections')?.combined ||
+    pandaCache.get('dashboard:overview')?.storage ||
+    null
+  );
+
+  useEffect(() => {
+    if (storageMetrics) {
+      setMetrics(storageMetrics);
+    }
+  }, [storageMetrics]);
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const updated =
+        pandaCache.get('storage:metrics') ||
+        pandaCache.get('storage:connections')?.combined ||
+        pandaCache.get('dashboard:overview')?.storage ||
+        null;
+      if (updated) setMetrics(updated);
+    };
+
+    window.addEventListener(PANDA_EVENTS.STORAGE_UPDATED, handleStorageChange);
+    window.addEventListener(PANDA_EVENTS.MEDIA_UPLOADED, handleStorageChange);
+    return () => {
+      window.removeEventListener(PANDA_EVENTS.STORAGE_UPDATED, handleStorageChange);
+      window.removeEventListener(PANDA_EVENTS.MEDIA_UPLOADED, handleStorageChange);
+    };
+  }, []);
 
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -110,32 +144,50 @@ export function Sidebar({ storageMetrics = null }) {
       {/* Sidebar Footer: Combined Storage Meter & User Profile */}
       <div className="p-4 border-t border-slate-800/80 space-y-3 bg-slate-950/80">
         {/* Storage Quick Widget */}
-        <Link
-          href="/storage"
-          className="block p-3 rounded-2xl bg-slate-900/80 border border-slate-800/80 hover:border-slate-700 transition-all group shadow-subtle"
-        >
-          <div className="flex items-center justify-between text-xs font-medium mb-1.5">
-            <span className="text-slate-300 flex items-center gap-1.5 font-semibold tracking-tight">
-              <HardDrive className="w-3.5 h-3.5 text-teal-400" />
-              <span>Storage</span>
-            </span>
-            <span className="text-slate-400 group-hover:text-teal-300 text-[11px] font-mono">
-              {storageMetrics && storageMetrics.providerCount > 0
-                ? storageMetrics.totalBytes
-                  ? `${formatBytes(storageMetrics.usedBytes)} / ${formatBytes(storageMetrics.totalBytes)}`
-                  : `${formatBytes(storageMetrics.usedBytes)} stored`
-                : 'Not Connected'}
-            </span>
-          </div>
-          {storageMetrics?.providerCount > 0 && storageMetrics?.totalBytes && (
-            <Progress
-              value={storageMetrics.usedBytes}
-              max={storageMetrics.totalBytes}
-              size="sm"
-              variant="teal"
-            />
-          )}
-        </Link>
+        {(() => {
+          const used = Number(metrics?.usedBytes) || 0;
+          const total = Number(metrics?.totalBytes) || 10737418240; // 10 GB default
+          const percentage = total > 0 ? (used / total) * 100 : 0;
+
+          const formattedPct = used === 0
+            ? '0.0%'
+            : percentage < 0.01
+            ? '< 0.01%'
+            : percentage < 1
+            ? `${percentage.toFixed(2)}%`
+            : `${percentage.toFixed(1)}%`;
+
+          const variant = percentage > 90 ? 'rose' : percentage > 75 ? 'amber' : 'teal';
+
+          return (
+            <Link
+              href="/storage"
+              className="block p-3 rounded-2xl bg-slate-900/80 border border-slate-800/80 hover:border-slate-700 transition-all group shadow-subtle space-y-2"
+            >
+              <div className="flex items-center justify-between text-xs font-medium">
+                <span className="text-slate-300 flex items-center gap-1.5 font-semibold tracking-tight">
+                  <HardDrive className="w-3.5 h-3.5 text-teal-400" />
+                  <span>Storage</span>
+                </span>
+                <span className="text-teal-400 group-hover:text-teal-300 text-[11px] font-mono font-semibold">
+                  {formattedPct}
+                </span>
+              </div>
+
+              <Progress
+                value={used}
+                max={total}
+                size="sm"
+                variant={variant}
+              />
+
+              <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                <span>{formatBytes(used)} used</span>
+                <span className="text-slate-500">of {formatBytes(total)}</span>
+              </div>
+            </Link>
+          );
+        })()}
 
         {/* User Badge & Logout */}
         <div className="flex items-center justify-between pt-1">

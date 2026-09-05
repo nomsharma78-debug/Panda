@@ -20,7 +20,7 @@ export async function GET(request) {
   try {
     const shouldSync = searchParams.get('sync') === 'true';
 
-    // Cloud bucket reconciliation runs when explicitly requested by user (e.g. clicking Sync)
+    // Cloud bucket reconciliation runs when explicitly requested
     if (shouldSync) {
       try {
         await StorageManager.syncStorageMedia(authData.user.id, token);
@@ -29,7 +29,7 @@ export async function GET(request) {
       }
     }
 
-    const items = await listUserMedia(authData.user.id, {
+    let items = await listUserMedia(authData.user.id, {
       token,
       mediaType,
       search,
@@ -37,10 +37,28 @@ export async function GET(request) {
       offset,
     });
 
+    // Auto-discover files ONLY on initial empty library load with no filter/search
+    if (mediaType === 'all' && (!items || items.length === 0) && offset === 0 && !search && !shouldSync) {
+      try {
+        const discovered = await StorageManager.syncStorageMedia(authData.user.id, token);
+        if (discovered && discovered.length > 0) {
+          items = await listUserMedia(authData.user.id, {
+            token,
+            mediaType,
+            search,
+            limit,
+            offset,
+          });
+        }
+      } catch (autoSyncErr) {
+        console.warn('[API media] Auto-sync notice:', autoSyncErr.message);
+      }
+    }
+
     return NextResponse.json(
       {
-        items,
-        count: items.length,
+        items: items || [],
+        count: items ? items.length : 0,
       },
       {
         headers: {

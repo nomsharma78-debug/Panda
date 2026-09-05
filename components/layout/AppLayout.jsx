@@ -41,7 +41,6 @@ export function AppLayout({
       const cached = pandaCache.get(METRICS_CACHE_KEY) || pandaCache.get('storage:connections')?.combined;
       if (cached) {
         setStorageMetrics(cached);
-        return;
       }
     }
 
@@ -101,7 +100,16 @@ export function AppLayout({
     );
   }
 
-  if (!user) return null;
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-950 text-slate-400">
+        <div className="flex items-center gap-2.5 text-xs text-slate-500 font-mono animate-fade-in">
+          <div className="w-4 h-4 border-2 border-teal-500/30 border-t-teal-400 rounded-full animate-spin" />
+          <span>Redirecting to login...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex">
