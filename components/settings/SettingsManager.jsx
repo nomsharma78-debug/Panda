@@ -23,6 +23,21 @@ import {
   Globe,
   Radio,
   LogOut,
+  Search,
+  RefreshCw,
+  Filter,
+  ChevronDown,
+  ChevronUp,
+  ShieldAlert,
+  ShieldCheck,
+  UserCheck,
+  UserPlus,
+  Upload,
+  Cloud,
+  CloudOff,
+  FileText,
+  Clock,
+  ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -128,6 +143,10 @@ export function SettingsManager({ initialTab = 'account' }) {
   // Audit logs state
   const [auditLogs, setAuditLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditFilter, setAuditFilter] = useState('ALL');
+  const [expandedLogIds, setExpandedLogIds] = useState(new Set());
+  const [isExporting, setIsExporting] = useState(false);
 
   // Fetch data on tab change or poll sessions in background
   useEffect(() => {
@@ -140,7 +159,7 @@ export function SettingsManager({ initialTab = 'account' }) {
     } else if (activeTab === 'database') {
       fetchSchemaSql();
     } else if (activeTab === 'audit') {
-      fetchAuditLogs();
+      fetchAuditLogs(auditLogs.length === 0);
     }
   }, [activeTab, session?.access_token]);
 
@@ -173,21 +192,80 @@ export function SettingsManager({ initialTab = 'account' }) {
     } catch {}
   };
 
-  const fetchAuditLogs = async () => {
+  const fetchAuditLogs = async (showLoading = true) => {
     try {
-      setLoadingLogs(true);
-      const headers = {};
+      if (showLoading) setLoadingLogs(true);
+      const headers = { 'Cache-Control': 'no-cache' };
       if (session?.access_token) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
-      const res = await fetch('/api/audit?limit=50', { headers, credentials: 'include' });
+      const res = await fetch('/api/audit?limit=100', { headers, credentials: 'include' });
       if (res.ok) {
         const d = await res.json();
         setAuditLogs(d.logs || []);
       }
-    } catch {}
-    finally {
-      setLoadingLogs(false);
+    } catch {
+      toastError('Failed to fetch audit logs');
+    } finally {
+      if (showLoading) setLoadingLogs(false);
+    }
+  };
+
+  const toggleLogExpand = (id) => {
+    setExpandedLogIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleExportAuditLogs = (format = 'json') => {
+    if (!auditLogs || auditLogs.length === 0) {
+      toastError('No logs to export');
+      return;
+    }
+    setIsExporting(true);
+    try {
+      let content = '';
+      let mime = 'application/json';
+      let ext = 'json';
+
+      if (format === 'json') {
+        content = JSON.stringify(auditLogs, null, 2);
+        mime = 'application/json';
+        ext = 'json';
+      } else {
+        // CSV format
+        const headers = ['ID', 'Action', 'Status', 'IP Address', 'User Agent', 'Timestamp', 'Metadata'];
+        const rows = auditLogs.map((l) => [
+          l.id,
+          `"${(l.action || '').replace(/"/g, '""')}"`,
+          l.status,
+          l.ip_address || '',
+          `"${(l.user_agent || '').replace(/"/g, '""')}"`,
+          l.created_at,
+          `"${JSON.stringify(l.metadata || {}).replace(/"/g, '""')}"`,
+        ]);
+        content = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+        mime = 'text/csv';
+        ext = 'csv';
+      }
+
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `panda_audit_log_${new Date().toISOString().slice(0, 10)}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      success(`Audit logs exported as .${ext.toUpperCase()}`);
+    } catch {
+      toastError('Failed to export audit logs');
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -632,43 +710,328 @@ export function SettingsManager({ initialTab = 'account' }) {
 
       {/* AUDIT LOGS TAB */}
       {activeTab === 'audit' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-card space-y-4 max-w-4xl">
-          <div className="space-y-1">
-            <h3 className="text-base font-semibold text-white">Security Audit Log</h3>
-            <p className="text-xs text-slate-400">
-              Immutable server-side audit logs for all security actions. Secrets and passwords are never logged.
-            </p>
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-card space-y-6 max-w-5xl animate-fade-in">
+          {/* Header & Controls */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5">
+                <History className="w-5 h-5 text-teal-400" />
+                <h3 className="text-base sm:text-lg font-bold text-white">Security & Audit History</h3>
+              </div>
+              <p className="text-xs text-slate-400 max-w-xl">
+                Immutable chronological log of authentication, vault actions, and cloud storage events. Secrets and credentials are automatically redacted.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={RefreshCw}
+                isLoading={loadingLogs}
+                onClick={() => fetchAuditLogs(true)}
+                title="Refresh audit logs"
+              >
+                Refresh
+              </Button>
+
+              <div className="relative group">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={Download}
+                  isLoading={isExporting}
+                  onClick={() => handleExportAuditLogs('json')}
+                >
+                  Export JSON
+                </Button>
+              </div>
+
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={Download}
+                isLoading={isExporting}
+                onClick={() => handleExportAuditLogs('csv')}
+              >
+                Export CSV
+              </Button>
+            </div>
           </div>
 
-          {loadingLogs ? (
-            <p className="text-xs text-slate-400">Loading audit history...</p>
-          ) : auditLogs.length === 0 ? (
-            <p className="text-xs text-slate-400 py-4">No audit events recorded.</p>
-          ) : (
-            <div className="divide-y divide-slate-800/80 overflow-x-auto">
-              {auditLogs.map((log) => (
-                <div key={log.id} className="py-3 flex items-center justify-between text-xs gap-4">
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold ${
-                        log.status === 'SUCCESS'
-                          ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
-                          : 'bg-rose-500/10 border border-rose-500/30 text-rose-400'
-                      }`}
-                    >
-                      {log.status}
-                    </span>
-                    <span className="font-mono text-slate-200 font-medium">{log.action}</span>
-                  </div>
-
-                  <div className="flex items-center gap-4 text-slate-400 text-[11px] font-mono shrink-0">
-                    <span>{log.ip_address}</span>
-                    <span>{new Date(log.created_at).toLocaleString()}</span>
-                  </div>
-                </div>
-              ))}
+          {/* Search & Filter Bar */}
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+            {/* Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+              {[
+                { id: 'ALL', label: 'All Events' },
+                { id: 'AUTH', label: 'Authentication' },
+                { id: 'VAULT', label: 'Vault' },
+                { id: 'STORAGE', label: 'Storage' },
+                { id: 'MEDIA', label: 'Media' },
+                { id: 'FAILED', label: 'Failed' },
+              ].map((f) => {
+                const active = auditFilter === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setAuditFilter(f.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                      active
+                        ? 'bg-teal-500 text-slate-950 shadow-glow-teal'
+                        : 'bg-slate-950/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-800/80'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                );
+              })}
             </div>
-          )}
+
+            {/* Search Input */}
+            <div className="relative flex-1 md:w-64">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search action, IP, metadata..."
+                value={auditSearch}
+                onChange={(e) => setAuditSearch(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3.5 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500"
+              />
+            </div>
+          </div>
+
+          {/* Content Area */}
+          {loadingLogs ? (
+            <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-3">
+              <Loader2 className="w-6 h-6 animate-spin text-teal-400" />
+              <span className="text-xs font-mono">Retrieving security audit trail…</span>
+            </div>
+          ) : (() => {
+            const filteredLogs = auditLogs.filter((log) => {
+              const act = (log.action || '').toUpperCase();
+              const status = (log.status || '').toUpperCase();
+              const metaStr = JSON.stringify(log.metadata || {}).toLowerCase();
+              const ip = (log.ip_address || '').toLowerCase();
+              const ua = (log.user_agent || '').toLowerCase();
+
+              // Category filter
+              if (auditFilter === 'AUTH' && !act.includes('AUTH') && !act.includes('LOGIN') && !act.includes('LOGOUT') && !act.includes('REGISTER') && !act.includes('PASSWORD') && !act.includes('SESSION')) {
+                return false;
+              }
+              if (auditFilter === 'VAULT' && !act.includes('VAULT')) {
+                return false;
+              }
+              if (auditFilter === 'STORAGE' && !act.includes('STORAGE')) {
+                return false;
+              }
+              if (auditFilter === 'MEDIA' && !act.includes('MEDIA')) {
+                return false;
+              }
+              if (auditFilter === 'FAILED' && status === 'SUCCESS') {
+                return false;
+              }
+
+              // Search query
+              if (auditSearch && auditSearch.trim()) {
+                const q = auditSearch.trim().toLowerCase();
+                const matchAction = act.toLowerCase().includes(q);
+                const matchIp = ip.includes(q);
+                const matchUa = ua.includes(q);
+                const matchMeta = metaStr.includes(q);
+                if (!matchAction && !matchIp && !matchUa && !matchMeta) return false;
+              }
+
+              return true;
+            });
+
+            if (filteredLogs.length === 0) {
+              return (
+                <div className="p-12 text-center bg-slate-950/60 rounded-2xl border border-slate-800/80 space-y-3">
+                  <ShieldCheck className="w-10 h-10 text-slate-500 mx-auto" />
+                  <h4 className="text-sm font-semibold text-slate-200">No Audit Events Found</h4>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                    {auditSearch || auditFilter !== 'ALL'
+                      ? 'No events match the current filter or search criteria.'
+                      : 'Audit events will appear here automatically when security actions occur in your vault.'}
+                  </p>
+                  {(auditSearch || auditFilter !== 'ALL') && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setAuditSearch('');
+                        setAuditFilter('ALL');
+                      }}
+                    >
+                      Clear Filters
+                    </Button>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs text-slate-400 px-1 font-mono">
+                  <span>Showing {filteredLogs.length} events</span>
+                  <span>Zero-Knowledge Redaction Active</span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {filteredLogs.map((log) => {
+                    const isExpanded = expandedLogIds.has(log.id);
+                    const isSuccess = log.status === 'SUCCESS';
+                    const rawAction = log.action || 'SECURITY_EVENT';
+                    const act = rawAction.toUpperCase();
+
+                    let ActionIcon = ShieldCheck;
+                    let actionLabel = rawAction.replace(/_/g, ' ');
+                    let actionColor = 'text-teal-400 bg-teal-500/10 border-teal-500/30';
+
+                    if (act.includes('LOGIN')) {
+                      ActionIcon = Key;
+                      actionLabel = 'User Logged In';
+                      actionColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
+                    } else if (act.includes('LOGOUT')) {
+                      ActionIcon = LogOut;
+                      actionLabel = 'User Signed Out';
+                      actionColor = 'text-slate-400 bg-slate-500/10 border-slate-500/30';
+                    } else if (act.includes('REGISTER')) {
+                      ActionIcon = UserPlus;
+                      actionLabel = 'Account Created';
+                      actionColor = 'text-teal-400 bg-teal-500/10 border-teal-500/30';
+                    } else if (act.includes('PASSWORD')) {
+                      ActionIcon = Key;
+                      actionLabel = 'Password Changed';
+                      actionColor = 'text-amber-400 bg-amber-500/10 border-amber-500/30';
+                    } else if (act.includes('SESSION')) {
+                      ActionIcon = Smartphone;
+                      actionLabel = 'Session Revoked';
+                      actionColor = 'text-rose-400 bg-rose-500/10 border-rose-500/30';
+                    } else if (act.includes('VAULT') && act.includes('CREATE')) {
+                      ActionIcon = Lock;
+                      actionLabel = 'Vault Item Created';
+                      actionColor = 'text-teal-400 bg-teal-500/10 border-teal-500/30';
+                    } else if (act.includes('VAULT') && act.includes('UPDATE')) {
+                      ActionIcon = Lock;
+                      actionLabel = 'Vault Item Updated';
+                      actionColor = 'text-sky-400 bg-sky-500/10 border-sky-500/30';
+                    } else if (act.includes('VAULT') && act.includes('DELETE')) {
+                      ActionIcon = Trash2;
+                      actionLabel = 'Vault Item Deleted';
+                      actionColor = 'text-rose-400 bg-rose-500/10 border-rose-500/30';
+                    } else if (act.includes('STORAGE') && (act.includes('CONNECT') || act.includes('CREATE'))) {
+                      ActionIcon = Cloud;
+                      actionLabel = 'Cloud Storage Connected';
+                      actionColor = 'text-teal-400 bg-teal-500/10 border-teal-500/30';
+                    } else if (act.includes('STORAGE') && act.includes('DELETE')) {
+                      ActionIcon = CloudOff;
+                      actionLabel = 'Cloud Storage Disconnected';
+                      actionColor = 'text-rose-400 bg-rose-500/10 border-rose-500/30';
+                    } else if (act.includes('MEDIA') && act.includes('UPLOAD')) {
+                      ActionIcon = Upload;
+                      actionLabel = 'Media Uploaded';
+                      actionColor = 'text-teal-400 bg-teal-500/10 border-teal-500/30';
+                    } else if (act.includes('MEDIA') && act.includes('DELETE')) {
+                      ActionIcon = Trash2;
+                      actionLabel = 'Media Deleted';
+                      actionColor = 'text-rose-400 bg-rose-500/10 border-rose-500/30';
+                    } else if (act.includes('INACTIVITY')) {
+                      ActionIcon = Clock;
+                      actionLabel = 'Inactivity Timeout Changed';
+                      actionColor = 'text-purple-400 bg-purple-500/10 border-purple-500/30';
+                    }
+
+                    const hasMetadata = log.metadata && Object.keys(log.metadata).length > 0;
+
+                    return (
+                      <div
+                        key={log.id}
+                        className="bg-slate-950 border border-slate-800/80 hover:border-slate-700/80 rounded-2xl p-4 transition-all duration-150 space-y-3"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex items-start gap-3">
+                            <div className={`p-2.5 rounded-xl border flex-shrink-0 ${actionColor}`}>
+                              <ActionIcon className="w-4 h-4" />
+                            </div>
+
+                            <div className="space-y-1 min-w-0">
+                              <div className="flex items-center flex-wrap gap-2">
+                                <span className="font-semibold text-slate-100 text-xs sm:text-sm">
+                                  {actionLabel}
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider border ${
+                                    isSuccess
+                                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                      : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                                  }`}
+                                >
+                                  {log.status || 'SUCCESS'}
+                                </span>
+                                <span className="text-[10px] font-mono text-slate-500 bg-slate-900 px-2 py-0.5 rounded-md border border-slate-800">
+                                  {rawAction}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-slate-400 text-[11px] font-mono">
+                                <span>IP: {log.ip_address || '127.0.0.1'}</span>
+                                {log.user_agent && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="truncate max-w-[200px] sm:max-w-xs" title={log.user_agent}>
+                                      {log.user_agent}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between sm:justify-end gap-3 self-end sm:self-center shrink-0">
+                            <span className="text-[11px] text-slate-400 font-mono">
+                              {new Date(log.created_at).toLocaleString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit',
+                              })}
+                            </span>
+
+                            {hasMetadata && (
+                              <button
+                                type="button"
+                                onClick={() => toggleLogExpand(log.id)}
+                                className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 transition-colors flex items-center gap-1 text-[11px]"
+                                title="View metadata"
+                              >
+                                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Expandable Metadata JSON Viewer */}
+                        {isExpanded && hasMetadata && (
+                          <div className="pt-2 border-t border-slate-900 animate-slide-up">
+                            <span className="text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                              Event Metadata:
+                            </span>
+                            <pre className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-mono text-teal-300 overflow-x-auto">
+                              {JSON.stringify(log.metadata, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

@@ -13,6 +13,8 @@ export function MediaUploadModal({
   onClose,
   onUploadSuccess,
   onOpenConnectStorage,
+  initialFolderId = null,
+  folders = [],
 }) {
   const { session } = useAuth();
   const { success, error: toastError } = useToast();
@@ -21,6 +23,8 @@ export function MediaUploadModal({
   const [files, setFiles] = useState([]);
   const [storageProviders, setStorageProviders] = useState([]);
   const [selectedStorage, setSelectedStorage] = useState('auto');
+  const [folderList, setFolderList] = useState(folders || []);
+  const [selectedFolderId, setSelectedFolderId] = useState(initialFolderId || '');
   const [encryptPayload, setEncryptPayload] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -29,9 +33,10 @@ export function MediaUploadModal({
 
   const [isLoadingStorage, setIsLoadingStorage] = useState(true);
 
-  // Fetch available storage connections
+  // Sync folders when opened or prop changes
   useEffect(() => {
     if (isOpen) {
+      setSelectedFolderId(initialFolderId || '');
       setIsLoadingStorage(true);
 
       const headers = {};
@@ -39,15 +44,21 @@ export function MediaUploadModal({
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      fetch('/api/storage', { headers, credentials: 'include' })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data?.connections) {
-            setStorageProviders(data.connections);
-            const defaultConn = data.connections.find((c) => c.is_default) || data.connections[0];
+      // Fetch storage connections and user folders in parallel
+      Promise.allSettled([
+        fetch('/api/storage', { headers, credentials: 'include' }).then((res) => res.json()),
+        fetch('/api/media/folders', { headers, credentials: 'include' }).then((res) => res.json()),
+      ])
+        .then(([storageRes, folderRes]) => {
+          if (storageRes.status === 'fulfilled' && storageRes.value?.connections) {
+            setStorageProviders(storageRes.value.connections);
+            const defaultConn = storageRes.value.connections.find((c) => c.is_default) || storageRes.value.connections[0];
             if (defaultConn) {
               setSelectedStorage(defaultConn.id);
             }
+          }
+          if (folderRes.status === 'fulfilled' && folderRes.value?.folders) {
+            setFolderList(folderRes.value.folders);
           }
         })
         .catch(() => {})
@@ -55,7 +66,7 @@ export function MediaUploadModal({
           setIsLoadingStorage(false);
         });
     }
-  }, [isOpen, session?.access_token]);
+  }, [isOpen, initialFolderId, session?.access_token]);
 
   const handleFileSelect = (e) => {
     if (e.target.files) {
@@ -98,6 +109,9 @@ export function MediaUploadModal({
       formData.append('file', file);
       formData.append('storageId', selectedStorage);
       formData.append('encrypt', String(encryptPayload));
+      if (selectedFolderId) {
+        formData.append('folderId', selectedFolderId);
+      }
 
       try {
         const headers = {};
@@ -206,7 +220,7 @@ export function MediaUploadModal({
                 </div>
                 <p className="text-sm font-semibold text-white">Click or drag & drop files here</p>
                 <p className="text-xs text-slate-400 mt-1 max-w-xs">
-                  Supports photos, videos, CDR vector drawings, PDFs, and documents up to 500MB
+                  Supports photos, videos, PDFs, and documents up to 500MB
                 </p>
               </div>
             ) : (
@@ -248,25 +262,49 @@ export function MediaUploadModal({
               </div>
             )}
 
-            {/* Storage Destination Options */}
-            <div className="p-4 rounded-3xl bg-slate-950/60 border border-slate-800 text-xs">
-              <label className="text-slate-300 font-semibold mb-1.5 flex items-center gap-1.5">
-                <HardDrive className="w-3.5 h-3.5 text-teal-400" />
-                <span>Storage Target</span>
-              </label>
-              <select
-                value={selectedStorage}
-                onChange={(e) => setSelectedStorage(e.target.value)}
-                disabled={isUploading}
-                className="w-full bg-slate-900 border border-slate-700 rounded-2xl px-3 py-2 text-slate-200 focus:outline-none focus:border-teal-500"
-              >
-                <option value="auto">Automatic (Default)</option>
-                {storageProviders.map((sp) => (
-                  <option key={sp.id} value={sp.id}>
-                    {sp.name} ({sp.provider.toUpperCase()})
-                  </option>
-                ))}
-              </select>
+            {/* Destination Configuration Grid: Storage Target & Folder */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Storage Destination */}
+              <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 text-xs">
+                <label className="text-slate-300 font-semibold mb-1.5 flex items-center gap-1.5">
+                  <HardDrive className="w-3.5 h-3.5 text-teal-400" />
+                  <span>Storage Target</span>
+                </label>
+                <select
+                  value={selectedStorage}
+                  onChange={(e) => setSelectedStorage(e.target.value)}
+                  disabled={isUploading}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-teal-500"
+                >
+                  <option value="auto">Automatic (Default)</option>
+                  {storageProviders.map((sp) => (
+                    <option key={sp.id} value={sp.id}>
+                      {sp.name} ({sp.provider.toUpperCase()})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Folder Destination */}
+              <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 text-xs">
+                <label className="text-slate-300 font-semibold mb-1.5 flex items-center gap-1.5">
+                  <Folder className="w-3.5 h-3.5 text-teal-400" />
+                  <span>Target Folder</span>
+                </label>
+                <select
+                  value={selectedFolderId}
+                  onChange={(e) => setSelectedFolderId(e.target.value)}
+                  disabled={isUploading}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-teal-500"
+                >
+                  <option value="">Root / No Folder</option>
+                  {folderList.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      📁 {f.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Encryption Checkbox */}

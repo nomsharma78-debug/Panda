@@ -28,6 +28,7 @@ export async function POST(request) {
     const formData = await request.formData();
     const file = formData.get('file');
     const preferredStorageId = formData.get('storageId') || null;
+    const folderId = formData.get('folderId') || null;
     const enableEncryption = formData.get('encrypt') !== 'false';
 
     if (!file || typeof file === 'string') {
@@ -63,6 +64,7 @@ export async function POST(request) {
       mimeType,
       mediaType,
       preferredStorageId: preferredStorageId === 'auto' ? null : preferredStorageId,
+      folderId: folderId || null,
       enableEncryption,
     });
 

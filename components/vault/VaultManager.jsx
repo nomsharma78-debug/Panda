@@ -270,17 +270,7 @@ export function VaultManager({ initialType = VAULT_TYPES.ALL, onOpenAddModal }) 
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Ready Immediately Notification Banner */}
-      <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-900/80 border border-slate-800/80 flex items-center justify-between text-xs text-slate-300 shadow-subtle">
-        <div className="flex items-center gap-2.5">
-          <Database className="w-4 h-4 text-teal-400 shrink-0" />
-          <span>
-            Passwords, cards, and secure notes are encrypted and stored in Panda&apos;s database. <strong>External cloud storage is NOT required.</strong>
-          </span>
-        </div>
-        <span className="text-[11px] text-teal-400 font-mono shrink-0 hidden md:inline bg-teal-500/10 px-2 py-0.5 rounded-full border border-teal-500/20">
-          AES-256-GCM
-        </span>
-      </div>
+      
 
       {/* Control Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-800/80">

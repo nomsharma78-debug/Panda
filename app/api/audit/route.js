@@ -8,11 +8,12 @@ export async function GET(request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
   const { searchParams } = new URL(request.url);
-  const limit = parseInt(searchParams.get('limit') || '50', 10);
+  const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)));
 
   try {
-    const logs = await listUserAuditLogs(authData.user.id, limit);
+    const logs = await listUserAuditLogs(authData.user.id, limit, token);
     return NextResponse.json({ logs });
   } catch (err) {
     console.error('Audit logs error:', err);

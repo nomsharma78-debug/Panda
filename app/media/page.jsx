@@ -8,6 +8,7 @@ import { AddStorageModal } from '@/components/storage/AddStorageModal';
 
 export default function MediaPage() {
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [targetFolderId, setTargetFolderId] = useState(null);
   const [addStorageOpen, setAddStorageOpen] = useState(false);
 
   return (
@@ -16,13 +17,20 @@ export default function MediaPage() {
       subtitle="Unified chronological gallery for photos, videos, PDFs, and documents across all connected storage."
     >
       <MediaGallery
-        onOpenUpload={() => setUploadOpen(true)}
+        onOpenUpload={(folderId = null) => {
+          setTargetFolderId(folderId || null);
+          setUploadOpen(true);
+        }}
         onOpenConnectStorage={() => setAddStorageOpen(true)}
       />
 
       <MediaUploadModal
         isOpen={uploadOpen}
-        onClose={() => setUploadOpen(false)}
+        onClose={() => {
+          setUploadOpen(false);
+          setTargetFolderId(null);
+        }}
+        initialFolderId={targetFolderId}
         onUploadSuccess={() => {
           // Event already dispatched with newItems by MediaUploadModal
         }}

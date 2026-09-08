@@ -17,13 +17,12 @@ import {
   Calendar,
   Loader2,
   ImageOff,
-  Palette,
+  ExternalLink,
 } from 'lucide-react';
 import { VideoPlayer } from './VideoPlayer';
 import { formatBytes } from '@/components/ui/Progress';
 import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/components/context/AuthContext';
-import { mediaBlobCache } from '@/lib/client-cache';
 
 export function MediaLightbox({
   mediaList = [],
@@ -33,20 +32,19 @@ export function MediaLightbox({
   onIndexChange,
   onDelete,
 }) {
-  const { session, loading: authLoading } = useAuth();
+  const { session } = useAuth();
 
   // Lightbox manages its own internal index so navigation is instant
   const [internalIndex, setInternalIndex] = useState(initialIndex);
   const [zoom, setZoom] = useState(1);
   const [showInfo, setShowInfo] = useState(false);
 
-  // Blob loading state for current photo
-  const [photoBlobUrl, setPhotoBlobUrl] = useState(null);
-  const [photoLoading, setPhotoLoading] = useState(false);
-  const [photoError, setPhotoError] = useState(false);
-  const prevBlobRef = useRef(null);
+  const [photoLoading, setPhotoLoading] = useState(true);
+  const [photoError, setPhotoError] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
+  const imgRef = useRef(null);
 
-  // Sync internal index when prop changes (e.g. user clicks different card)
+  // Sync internal index when prop changes
   useEffect(() => {
     setInternalIndex(initialIndex);
   }, [initialIndex]);
@@ -69,97 +67,62 @@ export function MediaLightbox({
     mime === 'application/pdf' ||
     Boolean(filename.match(/\.pdf(\.enc)?$/i));
 
-  const isCdr =
-    type === 'cdr' ||
-    mime.includes('cdr') ||
-    mime.includes('coreldraw') ||
-    Boolean(filename.match(/\.cdr(\.enc)?$/i));
-
   const isPhoto =
     !isVideo &&
     !isPdf &&
-    !isCdr &&
     (type === 'photo' ||
       type === 'image' ||
       mime.startsWith('image/') ||
       Boolean(filename.match(/\.(jpg|jpeg|png|webp|gif|svg|bmp|heic|avif|ico|tiff)(\.enc)?$/i)));
 
-  // Reset zoom when item changes
+  const tokenParam = session?.access_token ? `token=${encodeURIComponent(session.access_token)}` : '';
+  const retryParam = retryKey > 0 ? `r=${retryKey}` : '';
+  const queryParts = [tokenParam, retryParam].filter(Boolean);
+  const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+
+  const accessUrl = currentItem?.id ? `/api/media/${currentItem.id}/access${queryString}` : '';
+  const downloadUrl = currentItem?.id ? `/api/media/${currentItem.id}/download${session?.access_token ? `?token=${encodeURIComponent(session.access_token)}` : ''}` : '';
+
+  // Reset zoom & loading states when item changes
   useEffect(() => {
     setZoom(1);
     setShowInfo(false);
-  }, [internalIndex]);
-
-  // Fetch image as blob when item changes
-  useEffect(() => {
-    if (!isOpen || !currentItem || !isPhoto) {
-      setPhotoBlobUrl(null);
+    setPhotoError(null);
+    if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0) {
       setPhotoLoading(false);
-      setPhotoError(false);
-      return;
+    } else {
+      setPhotoLoading(true);
     }
+  }, [internalIndex, currentItem?.id, accessUrl]);
 
-    // Check in-memory cache first (0ms instant preview)
-    const cached = mediaBlobCache.get(currentItem.id);
-    if (cached) {
-      setPhotoBlobUrl(cached);
-      setPhotoLoading(false);
-      setPhotoError(false);
-      return;
-    }
+  const handleImageLoad = useCallback(() => {
+    setPhotoLoading(false);
+    setPhotoError(null);
+  }, []);
 
-    if (authLoading) return;
+  const handleImageError = useCallback(() => {
+    setPhotoLoading(false);
+    setPhotoError('Image data could not be loaded from storage.');
+  }, []);
 
-    let cancelled = false;
-    setPhotoLoading(true);
-    setPhotoError(false);
-    setPhotoBlobUrl(null);
-
-    const tokenQuery = session?.access_token ? `?token=${encodeURIComponent(session.access_token)}` : '';
-    const mediaUrl = `/api/media/${currentItem.id}/access${tokenQuery}`;
-
-    const headers = {};
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
-    }
-
-    fetch(mediaUrl, {
-      headers,
-      credentials: 'include',
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(`Status ${res.status}`);
-        return res.blob();
-      })
-      .then((blob) => {
-        if (!cancelled) {
-          const objectUrl = URL.createObjectURL(blob);
-          mediaBlobCache.set(currentItem.id, objectUrl);
-          setPhotoBlobUrl(objectUrl);
-          setPhotoLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          console.warn('[MediaLightbox] Image fetch note:', err.message);
-          setPhotoError(true);
-          setPhotoLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen, currentItem?.id, isPhoto, session?.access_token, authLoading]);
-
-  // Revoke blob on unmount or close
-  useEffect(() => {
-    return () => {
-      if (prevBlobRef.current) {
-        URL.revokeObjectURL(prevBlobRef.current);
-        prevBlobRef.current = null;
+  const setImgRefCallback = useCallback((node) => {
+    imgRef.current = node;
+    if (node && node.complete) {
+      if (node.naturalWidth > 0) {
+        setPhotoLoading(false);
+        setPhotoError(null);
+      } else if (node.currentSrc || node.src) {
+        setPhotoLoading(false);
+        setPhotoError('Image data could not be loaded from storage.');
       }
-    };
+    }
+  }, []);
+
+  const handleRetry = useCallback((e) => {
+    e?.stopPropagation();
+    setPhotoError(null);
+    setPhotoLoading(true);
+    setRetryKey((prev) => prev + 1);
   }, []);
 
   const goTo = useCallback((idx) => {
@@ -186,10 +149,6 @@ export function MediaLightbox({
 
   if (!isOpen || !currentItem) return null;
 
-  const tokenParam = session?.access_token ? `?token=${encodeURIComponent(session.access_token)}` : '';
-  const downloadUrl = `/api/media/${currentItem.id}/download${tokenParam}`;
-  const videoUrl = `/api/media/${currentItem.id}/access${tokenParam}`;
-
   const formattedDate = currentItem.uploaded_at
     ? new Date(currentItem.uploaded_at).toLocaleString(undefined, {
         dateStyle: 'medium',
@@ -203,7 +162,7 @@ export function MediaLightbox({
       <div className="absolute top-0 inset-x-0 h-16 bg-gradient-to-b from-black/80 to-transparent flex items-center justify-between px-6 z-20">
         <div className="flex items-center gap-3 truncate max-w-md">
           <span className="text-sm font-semibold text-white truncate">
-            {currentItem.original_filename}
+            {rawFilename || 'Media File'}
           </span>
           <span className="text-xs text-slate-400 font-mono">
             {internalIndex + 1} / {mediaList.length}
@@ -252,7 +211,7 @@ export function MediaLightbox({
           {/* Download button */}
           <a
             href={downloadUrl}
-            download={currentItem.original_filename}
+            download={rawFilename}
             className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
             title="Download original"
           >
@@ -282,7 +241,7 @@ export function MediaLightbox({
       </div>
 
       {/* Main Preview Container */}
-      <div className="relative w-full h-full flex items-center justify-center p-4 sm:p-12 overflow-hidden">
+      <div className="relative w-full h-full flex items-center justify-center p-4 sm:p-8 overflow-hidden">
         {/* Navigation Previous */}
         {internalIndex > 0 && (
           <button
@@ -295,104 +254,92 @@ export function MediaLightbox({
         )}
 
         {/* Content Viewer */}
-        <div className="max-w-5xl max-h-[80vh] flex items-center justify-center overflow-auto">
+        <div className="w-full h-full flex items-center justify-center overflow-auto p-2">
           {isPhoto && (
-            <>
-              {photoLoading && (
-                <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="w-10 h-10 text-teal-400 animate-spin" />
-                  <span className="text-sm text-slate-400">Decrypting & loading…</span>
+            <div className="relative flex items-center justify-center max-w-full max-h-full">
+              {photoLoading && !photoError && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10 pointer-events-none">
+                  <div className="flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl bg-slate-900/80 backdrop-blur-sm border border-slate-800 shadow-xl">
+                    <Loader2 className="w-7 h-7 text-teal-400 animate-spin" />
+                    <span className="text-xs text-slate-300 font-mono">Loading image…</span>
+                  </div>
                 </div>
               )}
-              {photoError && !photoLoading && (
-                <div className="flex flex-col items-center gap-3">
+
+              {photoError ? (
+                <div className="flex flex-col items-center gap-4 max-w-sm text-center p-8 bg-slate-900/90 rounded-3xl border border-slate-800 shadow-card">
                   <ImageOff className="w-12 h-12 text-slate-500" />
-                  <span className="text-sm text-slate-400">Could not load image</span>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-200 mb-1">Could not render image</p>
+                    <p className="text-xs text-slate-400 font-mono break-all">{photoError}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleRetry}
+                      className="px-4 py-2 rounded-xl text-xs font-semibold bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border border-teal-500/30 hover:border-teal-400/50 transition-colors"
+                    >
+                      Retry
+                    </button>
+                    <a
+                      href={accessUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 rounded-xl text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors flex items-center gap-1.5"
+                    >
+                      <span>Open link</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
                 </div>
-              )}
-              {photoBlobUrl && !photoLoading && !photoError && (
+              ) : (
                 <img
-                  src={photoBlobUrl}
-                  alt={currentItem.original_filename}
+                  ref={setImgRefCallback}
+                  key={accessUrl}
+                  src={accessUrl}
+                  alt={rawFilename || 'Photo'}
                   style={{ transform: `scale(${zoom})`, transition: 'transform 0.15s ease-out' }}
-                  className="max-h-[75vh] max-w-full object-contain rounded-lg shadow-2xl"
+                  className={`max-h-[82vh] max-w-[90vw] object-contain rounded-2xl shadow-2xl transition-opacity duration-200 ${
+                    photoLoading ? 'opacity-0' : 'opacity-100'
+                  }`}
+                  onLoad={handleImageLoad}
+                  onError={handleImageError}
                 />
               )}
-            </>
+            </div>
           )}
 
           {isVideo && (
-            <VideoPlayer src={videoUrl} mimeType={currentItem.mime_type} autoPlay />
+            <VideoPlayer src={accessUrl} mimeType={currentItem.mime_type} autoPlay />
           )}
 
-          {isCdr && (
-            <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl p-8 flex flex-col items-center text-center shadow-2xl animate-fade-in">
-              <div className="w-20 h-20 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(16,185,129,0.25)]">
-                <Palette className="w-10 h-10" />
+          {isPdf && (
+            <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl p-8 flex flex-col items-center text-center shadow-2xl animate-fade-in">
+              <div className="w-20 h-20 rounded-2xl bg-red-500/15 border border-red-500/30 text-red-400 flex items-center justify-center mb-4">
+                <FileText className="w-10 h-10" />
               </div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs font-mono font-semibold mb-3">
-                <span>CorelDRAW Vector Graphic (.cdr)</span>
-              </div>
-              <h3 className="text-lg font-semibold text-white mb-2 max-w-md truncate">{currentItem.original_filename}</h3>
+              <h3 className="text-lg font-semibold text-white mb-2 max-w-md truncate">{rawFilename}</h3>
               <p className="text-xs text-slate-400 mb-6 font-mono">
-                {formatBytes(currentItem.file_size)} • Vector Design File
+                {formatBytes(currentItem.file_size)} • PDF Document
               </p>
               <div className="flex items-center gap-3">
                 <a
-                  href={downloadUrl}
-                  download={currentItem.original_filename}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Download .CDR File</span>
-                </a>
-              </div>
-            </div>
-          )}
-
-          {!isCdr && (isPdf || currentItem.media_type === 'document') && (
-            <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl p-8 flex flex-col items-center text-center shadow-2xl">
-              <div className="w-16 h-16 rounded-2xl bg-teal-500/10 border border-teal-500/30 text-teal-400 flex items-center justify-center mb-4">
-                <FileText className="w-8 h-8" />
-              </div>
-              <h3 className="text-lg font-semibold text-white mb-2">{currentItem.original_filename}</h3>
-              <p className="text-xs text-slate-400 mb-6">
-                {formatBytes(currentItem.file_size)} • {currentItem.mime_type}
-              </p>
-              <div className="flex items-center gap-3">
-                <a
-                  href={downloadUrl}
+                  href={accessUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-slate-800 hover:bg-slate-700 text-white border border-slate-700"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-red-500 hover:bg-red-400 text-white font-bold transition-all"
                 >
-                  <span>Open in New Tab</span>
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Open PDF in Tab</span>
                 </a>
                 <a
                   href={downloadUrl}
-                  download={currentItem.original_filename}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-teal-500 hover:bg-teal-400 text-slate-950 shadow-glow-teal"
+                  download={rawFilename}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all border border-slate-700"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Download Document</span>
+                  <span>Download</span>
                 </a>
               </div>
-            </div>
-          )}
-
-          {!isCdr && !isPdf && !isPhoto && !isVideo && (currentItem.media_type === 'archive' || currentItem.media_type === 'other') && (
-            <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-8 flex flex-col items-center text-center shadow-2xl">
-              <FileText className="w-12 h-12 text-slate-400 mb-4" />
-              <h3 className="text-base font-semibold text-white mb-1">{currentItem.original_filename}</h3>
-              <p className="text-xs text-slate-400 mb-6 font-mono">{formatBytes(currentItem.file_size)}</p>
-              <a
-                href={downloadUrl}
-                download={currentItem.original_filename}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-teal-500 hover:bg-teal-400 text-slate-950"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download File</span>
-              </a>
             </div>
           )}
         </div>
@@ -409,54 +356,53 @@ export function MediaLightbox({
         )}
       </div>
 
-      {/* Metadata Inspector Drawer */}
+      {/* Info Sidebar Panel */}
       {showInfo && (
-        <div className="absolute right-0 inset-y-0 w-80 bg-slate-900 border-l border-slate-800 p-6 z-30 animate-slide-up flex flex-col justify-between overflow-y-auto">
-          <div className="space-y-6">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h4 className="text-sm font-semibold text-white">File Information</h4>
-              <button onClick={() => setShowInfo(false)} className="text-slate-400 hover:text-white">
-                <X className="w-4 h-4" />
-              </button>
+        <div className="absolute right-0 top-16 bottom-0 w-80 bg-slate-900/95 border-l border-slate-800 p-6 z-20 backdrop-blur-md overflow-y-auto animate-slide-left space-y-5 text-xs">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+            <h4 className="font-semibold text-white text-sm">File Details</h4>
+            <button
+              onClick={() => setShowInfo(false)}
+              className="text-slate-400 hover:text-white p-1 rounded-lg"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <span className="text-slate-500 block mb-1 text-[11px] uppercase tracking-wider font-semibold">File Name</span>
+              <p className="text-slate-200 font-mono break-all bg-slate-950/60 p-2 rounded-xl border border-slate-800/80">
+                {rawFilename}
+              </p>
             </div>
 
-            <div className="space-y-4 text-xs">
-              <div>
-                <span className="text-slate-400 block mb-1">Filename</span>
-                <span className="text-slate-100 font-medium break-all">{currentItem.original_filename}</span>
-              </div>
+            <div>
+              <span className="text-slate-500 block mb-1 text-[11px] uppercase tracking-wider font-semibold">Size</span>
+              <p className="text-slate-200 font-mono">
+                {formatBytes(currentItem.file_size)}
+              </p>
+            </div>
 
-              <div>
-                <span className="text-slate-400 block mb-1">File Size</span>
-                <span className="text-slate-100 font-mono">{formatBytes(currentItem.file_size)}</span>
-              </div>
+            <div>
+              <span className="text-slate-500 block mb-1 text-[11px] uppercase tracking-wider font-semibold">Content Type</span>
+              <p className="text-slate-200 font-mono">
+                {currentItem.mime_type || 'Unknown'}
+              </p>
+            </div>
 
-              <div>
-                <span className="text-slate-400 block mb-1">MIME Type</span>
-                <span className="text-slate-100 font-mono">{currentItem.mime_type}</span>
-              </div>
+            <div>
+              <span className="text-slate-500 block mb-1 text-[11px] uppercase tracking-wider font-semibold">Uploaded Date</span>
+              <p className="text-slate-200 font-mono">
+                {formattedDate}
+              </p>
+            </div>
 
-              <div>
-                <span className="text-slate-400 block mb-1">Uploaded Date & Time</span>
-                <span className="text-slate-100 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-teal-400" />
-                  <span>{formattedDate}</span>
-                </span>
-              </div>
-
-              <div>
-                <span className="text-slate-400 block mb-1">Storage Location</span>
-                <span className="text-slate-100 flex items-center gap-1.5">
-                  <HardDrive className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>{currentItem.storage_name || 'Panda Storage'} ({currentItem.storage_provider || 'Cloud'})</span>
-                </span>
-              </div>
-
-              <div>
-                <span className="text-slate-400 block mb-1">Security & Encryption</span>
-                <Badge variant={currentItem.encrypted ? 'teal' : 'default'} size="sm">
-                  {currentItem.encrypted ? 'AES-256-GCM Encrypted' : 'Standard Object Storage'}
-                </Badge>
+            <div>
+              <span className="text-slate-500 block mb-1 text-[11px] uppercase tracking-wider font-semibold">Security</span>
+              <div className="flex items-center gap-1.5 text-teal-400 font-semibold mt-1">
+                <Shield className="w-4 h-4" />
+                <span>AES-256-GCM Encrypted</span>
               </div>
             </div>
           </div>

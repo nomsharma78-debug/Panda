@@ -9,9 +9,10 @@ export async function GET(request, { params }) {
   }
 
   const { id } = await params;
+  const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
 
   try {
-    const { buffer, mimeType, filename, size } = await StorageManager.getMediaBinary(authData.user.id, id);
+    const { buffer, mimeType, filename, size } = await StorageManager.getMediaBinary(authData.user.id, id, token);
 
     return new Response(buffer, {
       status: 200,
