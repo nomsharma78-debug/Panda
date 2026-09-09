@@ -124,6 +124,14 @@ export function SettingsManager({ initialTab = 'account' }) {
   const [isRevokingSessions, setIsRevokingSessions] = useState(false);
   const [revokingId, setRevokingId] = useState(null);
 
+  // Inactivity timeout state
+  const [customInactivityInput, setCustomInactivityInput] = useState((inactivityMinutes || 15).toString());
+  useEffect(() => {
+    if (inactivityMinutes) {
+      setCustomInactivityInput(inactivityMinutes.toString());
+    }
+  }, [inactivityMinutes]);
+
   // Live 1-second dynamic relative time tick
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -691,11 +699,26 @@ export function SettingsManager({ initialTab = 'account' }) {
                     type="number"
                     min="1"
                     max="480"
-                    value={inactivityMinutes}
+                    value={customInactivityInput}
                     onChange={(e) => {
+                      setCustomInactivityInput(e.target.value);
                       const val = parseInt(e.target.value, 10);
-                      if (!isNaN(val) && val > 0) {
+                      if (!isNaN(val) && val >= 1 && val <= 480) {
                         updateInactivityTimeout(val);
+                      }
+                    }}
+                    onBlur={() => {
+                      const val = parseInt(customInactivityInput, 10);
+                      if (!isNaN(val) && val >= 1 && val <= 480) {
+                        updateInactivityTimeout(val);
+                        success(`Inactivity timeout set to ${val} minutes`);
+                      } else {
+                        setCustomInactivityInput((inactivityMinutes || 15).toString());
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.target.blur();
                       }
                     }}
                     className="w-20 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white font-mono text-center focus:outline-none focus:border-teal-500"

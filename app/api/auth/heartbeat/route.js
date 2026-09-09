@@ -14,7 +14,7 @@ export async function GET(request) {
     let ip = '';
     try {
       ip = getClientIp(request);
-    } catch {}
+    } catch { }
 
     // Validate that this device session is still active
     try {

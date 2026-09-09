@@ -50,6 +50,7 @@ export function AuthProvider({ children }) {
   const [clientCryptoKey, setClientCryptoKey] = useState(null);
   const [inactivityMinutes, setInactivityMinutesState] = useState(DEFAULT_INACTIVITY_MINUTES);
   const lastActivityRef = useRef(Date.now());
+  const isLoggingOutRef = useRef(false);
   const router = useRouter();
 
   // Load saved inactivity timeout preference
@@ -109,12 +110,18 @@ export function AuthProvider({ children }) {
       if (res.ok) {
         const data = await res.json();
         if (data.authenticated && data.user) {
+          isLoggingOutRef.current = false;
           setUser(data.user);
           setSession(data.session || { id: data.user.id });
           if (data.user?.inactivity_timeout_minutes) {
             const parsedMins = parseInt(data.user.inactivity_timeout_minutes, 10);
             if (!isNaN(parsedMins) && parsedMins >= 1) {
               setInactivityMinutesState(parsedMins);
+              if (typeof window !== 'undefined' && window.localStorage) {
+                try {
+                  window.localStorage.setItem(INACTIVITY_STORAGE_KEY, parsedMins.toString());
+                } catch {}
+              }
             }
           }
           resetActivityTimestamp();
@@ -189,6 +196,7 @@ export function AuthProvider({ children }) {
 
   /**
    * Automatic Inactivity Detector & Persistent Logout Timer
+   * Monitored across multiple browser tabs and background sleep/wake states
    */
   useEffect(() => {
     if (!user || inactivityMinutes <= 0) return;
@@ -208,7 +216,7 @@ export function AuthProvider({ children }) {
           logout(true);
           return;
         }
-        lastActivityRef.current = lastTs;
+        lastActivityRef.current = Math.max(lastActivityRef.current, lastTs);
       } else {
         resetActivityTimestamp();
       }
@@ -220,7 +228,7 @@ export function AuthProvider({ children }) {
     const recordActivity = () => {
       const currentNow = Date.now();
       lastActivityRef.current = currentNow;
-      if (currentNow - lastWriteTime > 10000) {
+      if (currentNow - lastWriteTime > 3000) {
         lastWriteTime = currentNow;
         try {
           window.localStorage?.setItem(LAST_ACTIVITY_STORAGE_KEY, currentNow.toString());
@@ -229,12 +237,15 @@ export function AuthProvider({ children }) {
     };
 
     const checkInactivity = () => {
-      let checkTs = lastActivityRef.current;
+      if (isLoggingOutRef.current) return;
+      let checkTs = lastActivityRef.current || Date.now();
       try {
         const stored = window.localStorage?.getItem(LAST_ACTIVITY_STORAGE_KEY);
         if (stored) {
           const parsed = parseInt(stored, 10);
-          if (!isNaN(parsed) && parsed > 0) checkTs = parsed;
+          if (!isNaN(parsed) && parsed > 0) {
+            checkTs = Math.max(checkTs, parsed);
+          }
         }
       } catch {}
 
@@ -244,7 +255,16 @@ export function AuthProvider({ children }) {
       }
     };
 
-    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click', 'pointerdown'];
+    const handleStorageChange = (e) => {
+      if (e.key === LAST_ACTIVITY_STORAGE_KEY && e.newValue) {
+        const parsed = parseInt(e.newValue, 10);
+        if (!isNaN(parsed) && parsed > 0) {
+          lastActivityRef.current = Math.max(lastActivityRef.current, parsed);
+        }
+      }
+    };
+
+    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click', 'pointerdown', 'wheel'];
     events.forEach((ev) => window.addEventListener(ev, recordActivity, { passive: true }));
 
     const handleWakeOrFocus = () => {
@@ -256,12 +276,14 @@ export function AuthProvider({ children }) {
         checkInactivity();
       }
     });
+    window.addEventListener('storage', handleStorageChange);
 
-    const checkInterval = setInterval(checkInactivity, 5000);
+    const checkInterval = setInterval(checkInactivity, 2000);
 
     return () => {
       events.forEach((ev) => window.removeEventListener(ev, recordActivity));
       window.removeEventListener('focus', handleWakeOrFocus);
+      window.removeEventListener('storage', handleStorageChange);
       clearInterval(checkInterval);
     };
   }, [user, inactivityMinutes, resetActivityTimestamp]);
@@ -310,6 +332,7 @@ export function AuthProvider({ children }) {
     }
 
     if (data.user) {
+      isLoggingOutRef.current = false;
       setUser(data.user);
       setSession({ id: data.user.id });
       resetActivityTimestamp();
@@ -337,6 +360,7 @@ export function AuthProvider({ children }) {
       throw new Error(data.error || 'Invalid email or password.');
     }
 
+    isLoggingOutRef.current = false;
     setUser(data.user);
     setSession({ id: data.user.id });
     resetActivityTimestamp();
@@ -365,6 +389,7 @@ export function AuthProvider({ children }) {
       throw new Error(data.error || 'Failed to create account.');
     }
 
+    isLoggingOutRef.current = false;
     setUser(data.user);
     setSession({ id: data.user.id });
     resetActivityTimestamp();
@@ -418,6 +443,9 @@ export function AuthProvider({ children }) {
    * Logout: Frontend -> Backend API (/api/auth/logout) -> Database
    */
   const logout = async (dueToInactivity = false) => {
+    if (isLoggingOutRef.current) return;
+    isLoggingOutRef.current = true;
+
     purgeLocalAuthStorage();
     pandaCache.clear();
     mediaBlobCache.clear();
@@ -435,9 +463,17 @@ export function AuthProvider({ children }) {
     pandaCache.setUser(null);
 
     if (dueToInactivity) {
-      router.push('/login?reason=inactivity');
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login?reason=inactivity';
+      } else {
+        router.push('/login?reason=inactivity');
+      }
     } else {
-      router.push('/login');
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      } else {
+        router.push('/login');
+      }
     }
   };
 

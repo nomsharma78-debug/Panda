@@ -15,7 +15,7 @@ export async function GET(request) {
   const currentIp = getClientIp(request);
 
   // Touch current device session in DB (verifies active status)
-  await touchDeviceSession(authData.user.id, currentUserAgent, currentIp).catch(() => {});
+  await touchDeviceSession(authData.user.id, currentUserAgent, currentIp).catch(() => { });
 
   try {
     const rawSessions = await listUserSessions(authData.user.id);
@@ -58,7 +58,7 @@ export async function GET(request) {
 
     // Clean up stale duplicate session records in background
     if (duplicateIdsToDelete.length > 0) {
-      Promise.all(duplicateIdsToDelete.map((id) => revokeSessionById(id, authData.user.id))).catch(() => {});
+      Promise.all(duplicateIdsToDelete.map((id) => revokeSessionById(id, authData.user.id))).catch(() => { });
     }
 
     // If current device was not in DB, add it

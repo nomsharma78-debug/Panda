@@ -1493,7 +1493,7 @@ function isItemInAnyFolder(item, folders = []) {
             )
           ) : (
             /* At Root Level */
-            filteredMedia.length === 0 ? (
+            filteredMedia.length === 0 && folderList.length === 0 ? (
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 sm:p-12 text-center max-w-xl mx-auto shadow-card space-y-4">
                 <div className="w-12 h-12 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center mx-auto text-teal-400">
                   <ImageIcon className="w-6 h-6" />
@@ -1507,6 +1507,8 @@ function isItemInAnyFolder(item, folders = []) {
                       ? `No items found matching "${searchInput}".`
                       : activeFilter !== MEDIA_CATEGORIES.ALL
                       ? `No ${activeFilter} found in your library.`
+                      : folderList.length > 0
+                      ? 'Open a folder above and upload your files there to keep your library organised.'
                       : 'Upload photos, videos, PDFs, or documents to store in your connected cloud storage.'}
                   </p>
                 </div>
@@ -1523,9 +1525,12 @@ function isItemInAnyFolder(item, folders = []) {
                       Show All Media
                     </Button>
                   ) : null}
-                  <Button variant="primary" size="sm" icon={Upload} onClick={() => handleUploadClick(null)}>
-                    Upload File
-                  </Button>
+                  {/* Only show the root-level upload button when there are no folders */}
+                  {!folderList.length && (
+                    <Button variant="primary" size="sm" icon={Upload} onClick={() => handleUploadClick(null)}>
+                      Upload File
+                    </Button>
+                  )}
                 </div>
               </div>
             ) : (
