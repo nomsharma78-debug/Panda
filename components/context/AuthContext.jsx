@@ -59,10 +59,20 @@ export function AuthProvider({ children }) {
         const saved = window.localStorage.getItem(INACTIVITY_STORAGE_KEY);
         if (saved !== null) {
           const parsed = parseInt(saved, 10);
-          if (!isNaN(parsed) && parsed >= 0) {
+          if (!isNaN(parsed) && parsed >= 1) {
             setInactivityMinutesState(parsed);
           }
         }
+      } catch {}
+    }
+  }, []);
+
+  const resetActivityTimestamp = useCallback(() => {
+    const now = Date.now();
+    lastActivityRef.current = now;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, now.toString());
       } catch {}
     }
   }, []);
@@ -75,7 +85,7 @@ export function AuthProvider({ children }) {
         window.localStorage.setItem(INACTIVITY_STORAGE_KEY, mins.toString());
       } catch {}
     }
-    lastActivityRef.current = Date.now();
+    resetActivityTimestamp();
 
     // Persist to database via backend API
     fetch('/api/settings/inactivity', {
@@ -102,8 +112,12 @@ export function AuthProvider({ children }) {
           setUser(data.user);
           setSession(data.session || { id: data.user.id });
           if (data.user?.inactivity_timeout_minutes) {
-            setInactivityMinutesState(data.user.inactivity_timeout_minutes);
+            const parsedMins = parseInt(data.user.inactivity_timeout_minutes, 10);
+            if (!isNaN(parsedMins) && parsedMins >= 1) {
+              setInactivityMinutesState(parsedMins);
+            }
           }
+          resetActivityTimestamp();
         } else {
           setUser(null);
           setSession(null);
@@ -118,7 +132,7 @@ export function AuthProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [resetActivityTimestamp]);
 
   // Hydrate auth status reactively on mount with useEffect
   useEffect(() => {
@@ -136,12 +150,12 @@ export function AuthProvider({ children }) {
 
   /**
    * Live Session Presence & Revocation Watchdog
-   * Checks every 25s (and on window focus) if session is valid in DB
+   * Checks every 30s (and on window focus) if session is valid in DB
    */
   useEffect(() => {
     if (!user) return;
 
-    let lastCheckTime = 0;
+    let lastCheckTime = Date.now();
     const checkRevocationStatus = async () => {
       const now = Date.now();
       if (now - lastCheckTime < 20000) return; // Throttle to max once per 20s
@@ -189,16 +203,17 @@ export function AuthProvider({ children }) {
     const now = Date.now();
     if (persisted) {
       const lastTs = parseInt(persisted, 10);
-      if (!isNaN(lastTs) && now - lastTs >= timeoutMs) {
-        logout(true);
-        return;
+      if (!isNaN(lastTs) && lastTs > 0) {
+        if (now - lastTs >= timeoutMs) {
+          logout(true);
+          return;
+        }
+        lastActivityRef.current = lastTs;
+      } else {
+        resetActivityTimestamp();
       }
-      lastActivityRef.current = lastTs;
     } else {
-      lastActivityRef.current = now;
-      try {
-        window.localStorage?.setItem(LAST_ACTIVITY_STORAGE_KEY, now.toString());
-      } catch {}
+      resetActivityTimestamp();
     }
 
     let lastWriteTime = 0;
@@ -219,7 +234,7 @@ export function AuthProvider({ children }) {
         const stored = window.localStorage?.getItem(LAST_ACTIVITY_STORAGE_KEY);
         if (stored) {
           const parsed = parseInt(stored, 10);
-          if (!isNaN(parsed)) checkTs = parsed;
+          if (!isNaN(parsed) && parsed > 0) checkTs = parsed;
         }
       } catch {}
 
@@ -249,7 +264,7 @@ export function AuthProvider({ children }) {
       window.removeEventListener('focus', handleWakeOrFocus);
       clearInterval(checkInterval);
     };
-  }, [user, inactivityMinutes]);
+  }, [user, inactivityMinutes, resetActivityTimestamp]);
 
   const initializeClientKey = async (secret, userEmail) => {
     try {
@@ -297,6 +312,7 @@ export function AuthProvider({ children }) {
     if (data.user) {
       setUser(data.user);
       setSession({ id: data.user.id });
+      resetActivityTimestamp();
       const secretToDerive = password || token;
       await initializeClientKey(secretToDerive, email);
       router.push('/dashboard');
@@ -323,6 +339,7 @@ export function AuthProvider({ children }) {
 
     setUser(data.user);
     setSession({ id: data.user.id });
+    resetActivityTimestamp();
     await initializeClientKey(password, email);
     router.push('/dashboard');
     return data;
@@ -350,6 +367,7 @@ export function AuthProvider({ children }) {
 
     setUser(data.user);
     setSession({ id: data.user.id });
+    resetActivityTimestamp();
     await initializeClientKey(password, email);
     router.push('/dashboard');
     return data;

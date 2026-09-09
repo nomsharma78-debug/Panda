@@ -51,7 +51,7 @@ export async function GET(request) {
             getCombinedStorageMetrics(authData.user.id, token),
           ]);
         }
-      } catch {}
+      } catch { }
     }
 
     return jsonSuccess({
@@ -112,7 +112,7 @@ export async function POST(request) {
     // Auto-discover and sync existing files in this bucket immediately
     try {
       await StorageManager.syncStorageMedia(authData.user.id, token);
-    } catch {}
+    } catch { }
 
     const ip = getClientIp(request);
     await logAuditEvent({

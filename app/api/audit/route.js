@@ -10,7 +10,7 @@ export async function GET(request) {
 
   const token = request.headers.get('authorization')?.slice(7)?.trim() || new URL(request.url).searchParams.get('token');
   const { searchParams } = new URL(request.url);
-  const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)));
+  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '100', 10)));
 
   try {
     const logs = await listUserAuditLogs(authData.user.id, limit, token);

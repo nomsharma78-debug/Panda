@@ -503,11 +503,10 @@ export function AddStorageModal({ isOpen, onClose, onStorageAdded }) {
           {/* Test Feedback */}
           {testResult && (
             <div
-              className={`p-4 rounded-2xl border text-xs animate-slide-up ${
-                testResult.success
+              className={`p-4 rounded-2xl border text-xs animate-slide-up ${testResult.success
                   ? 'bg-teal-500/10 border-teal-500/30 text-teal-300'
                   : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
-              }`}
+                }`}
             >
               <div className="flex items-center gap-2.5">
                 {testResult.success ? (
