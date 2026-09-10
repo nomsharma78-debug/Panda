@@ -12,6 +12,7 @@ import {
   HardDrive,
   Menu,
   Shield,
+  LogOut,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { PandaLogo } from '@/components/ui/PandaLogo';
@@ -27,7 +28,7 @@ export function Header({
   onSearch,
   searchPlaceholder = 'Search in Panda...',
 }) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchVal, setSearchVal] = useState('');
 
@@ -38,7 +39,7 @@ export function Header({
   };
 
   return (
-    <header className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-8 py-3.5 bg-slate-950/70 backdrop-blur-xl border-b border-slate-800/80">
+    <header className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-8 py-3 bg-slate-950/70 backdrop-blur-xl border-b border-slate-800/80">
       <div className="flex items-center gap-3">
         {/* Mobile Brand Logo */}
         <Link href="/dashboard" className="md:hidden flex items-center shrink-0">
@@ -54,10 +55,10 @@ export function Header({
       </div>
 
       {/* Action Controls */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         {/* Search Bar */}
         {onSearch && (
-          <div className="relative hidden sm:block w-64 md:w-80">
+          <div className="relative hidden sm:block w-48 md:w-72 lg:w-80">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
               type="text"
@@ -147,6 +148,18 @@ export function Header({
             </>
           )}
         </div>
+
+        {/* Dedicated Log Out Button */}
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={LogOut}
+          onClick={logout}
+          title="Log out of Panda Vault"
+          className="text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-slate-800/80 hover:border-rose-500/30 transition-all shrink-0"
+        >
+          <span className="hidden sm:inline">Log out</span>
+        </Button>
       </div>
     </header>
   );

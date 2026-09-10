@@ -159,20 +159,20 @@ export function MediaLightbox({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md select-none animate-fade-in">
       {/* Top Action Bar */}
-      <div className="absolute top-0 inset-x-0 h-16 bg-gradient-to-b from-black/80 to-transparent flex items-center justify-between px-6 z-20">
-        <div className="flex items-center gap-3 truncate max-w-md">
-          <span className="text-sm font-semibold text-white truncate">
+      <div className="absolute top-0 inset-x-0 h-14 sm:h-16 bg-gradient-to-b from-black/90 to-transparent flex items-center justify-between px-3 sm:px-6 z-20">
+        <div className="flex items-center gap-2 sm:gap-3 truncate max-w-[140px] xs:max-w-[220px] sm:max-w-md">
+          <span className="text-xs sm:text-sm font-semibold text-white truncate">
             {rawFilename || 'Media File'}
           </span>
-          <span className="text-xs text-slate-400 font-mono">
+          <span className="text-[10px] sm:text-xs text-slate-400 font-mono shrink-0">
             {internalIndex + 1} / {mediaList.length}
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           {/* Zoom controls for photos */}
           {isPhoto && (
-            <div className="flex items-center gap-1 bg-slate-900/80 rounded-xl p-1 border border-slate-800 mr-2">
+            <div className="hidden sm:flex items-center gap-1 bg-slate-900/80 rounded-xl p-1 border border-slate-800 mr-1 sm:mr-2">
               <button
                 onClick={() => setZoom((z) => Math.min(3, z + 0.25))}
                 className="p-1.5 text-slate-300 hover:text-white rounded-lg hover:bg-slate-800"
@@ -200,7 +200,7 @@ export function MediaLightbox({
           {/* Info toggle */}
           <button
             onClick={() => setShowInfo(!showInfo)}
-            className={`p-2 rounded-xl transition-colors ${
+            className={`p-1.5 sm:p-2 rounded-xl transition-colors ${
               showInfo ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30' : 'text-slate-300 hover:bg-slate-800'
             }`}
             title="File details"
@@ -212,7 +212,7 @@ export function MediaLightbox({
           <a
             href={downloadUrl}
             download={rawFilename}
-            className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 sm:p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
             title="Download original"
           >
             <Download className="w-4 h-4" />
@@ -222,7 +222,7 @@ export function MediaLightbox({
           {onDelete && (
             <button
               onClick={() => onDelete(currentItem)}
-              className="p-2 rounded-xl text-slate-300 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+              className="p-1.5 sm:p-2 rounded-xl text-slate-300 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
               title="Delete item"
             >
               <Trash2 className="w-4 h-4" />
@@ -232,7 +232,7 @@ export function MediaLightbox({
           {/* Close button */}
           <button
             onClick={onClose}
-            className="p-2 ml-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 sm:p-2 ml-1 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
             title="Close (Esc)"
           >
             <X className="w-5 h-5" />
@@ -241,20 +241,20 @@ export function MediaLightbox({
       </div>
 
       {/* Main Preview Container */}
-      <div className="relative w-full h-full flex items-center justify-center p-4 sm:p-8 overflow-hidden">
+      <div className="relative w-full h-full flex items-center justify-center p-2 sm:p-8 overflow-hidden">
         {/* Navigation Previous */}
         {internalIndex > 0 && (
           <button
             onClick={handlePrev}
-            className="absolute left-4 z-20 p-3 rounded-full bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700/80 shadow-lg hover:scale-105 transition-all"
+            className="absolute left-2 sm:left-4 z-20 p-2 sm:p-3 rounded-full bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700/80 shadow-lg hover:scale-105 transition-all"
             aria-label="Previous file"
           >
-            <ChevronLeft className="w-6 h-6" />
+            <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
         )}
 
         {/* Content Viewer */}
-        <div className="w-full h-full flex items-center justify-center overflow-auto p-2">
+        <div className="w-full h-full flex items-center justify-center overflow-auto p-1 sm:p-2">
           {isPhoto && (
             <div className="relative flex items-center justify-center max-w-full max-h-full">
               {photoLoading && !photoError && (
@@ -267,7 +267,7 @@ export function MediaLightbox({
               )}
 
               {photoError ? (
-                <div className="flex flex-col items-center gap-4 max-w-sm text-center p-8 bg-slate-900/90 rounded-3xl border border-slate-800 shadow-card">
+                <div className="flex flex-col items-center gap-4 max-w-sm text-center p-6 sm:p-8 bg-slate-900/90 rounded-3xl border border-slate-800 shadow-card">
                   <ImageOff className="w-12 h-12 text-slate-500" />
                   <div>
                     <p className="text-sm font-semibold text-slate-200 mb-1">Could not render image</p>
@@ -298,7 +298,7 @@ export function MediaLightbox({
                   src={accessUrl}
                   alt={rawFilename || 'Photo'}
                   style={{ transform: `scale(${zoom})`, transition: 'transform 0.15s ease-out' }}
-                  className={`max-h-[82vh] max-w-[90vw] object-contain rounded-2xl shadow-2xl transition-opacity duration-200 ${
+                  className={`max-h-[82vh] max-w-[95vw] sm:max-w-[90vw] object-contain rounded-xl sm:rounded-2xl shadow-2xl transition-opacity duration-200 ${
                     photoLoading ? 'opacity-0' : 'opacity-100'
                   }`}
                   onLoad={handleImageLoad}
@@ -313,20 +313,20 @@ export function MediaLightbox({
           )}
 
           {isPdf && (
-            <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl p-8 flex flex-col items-center text-center shadow-2xl animate-fade-in">
-              <div className="w-20 h-20 rounded-2xl bg-red-500/15 border border-red-500/30 text-red-400 flex items-center justify-center mb-4">
-                <FileText className="w-10 h-10" />
+            <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 flex flex-col items-center text-center shadow-2xl animate-fade-in mx-2">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-red-500/15 border border-red-500/30 text-red-400 flex items-center justify-center mb-4">
+                <FileText className="w-8 h-8 sm:w-10 sm:h-10" />
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2 max-w-md truncate">{rawFilename}</h3>
+              <h3 className="text-base sm:text-lg font-semibold text-white mb-2 max-w-md truncate">{rawFilename}</h3>
               <p className="text-xs text-slate-400 mb-6 font-mono">
                 {formatBytes(currentItem.file_size)} • PDF Document
               </p>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col sm:flex-row items-center gap-3">
                 <a
                   href={accessUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-red-500 hover:bg-red-400 text-white font-bold transition-all"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-red-500 hover:bg-red-400 text-white font-bold transition-all w-full sm:w-auto justify-center"
                 >
                   <ExternalLink className="w-4 h-4" />
                   <span>Open PDF in Tab</span>
@@ -334,7 +334,7 @@ export function MediaLightbox({
                 <a
                   href={downloadUrl}
                   download={rawFilename}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all border border-slate-700"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all border border-slate-700 w-full sm:w-auto justify-center"
                 >
                   <Download className="w-4 h-4" />
                   <span>Download</span>
@@ -348,17 +348,17 @@ export function MediaLightbox({
         {internalIndex < mediaList.length - 1 && (
           <button
             onClick={handleNext}
-            className="absolute right-4 z-20 p-3 rounded-full bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700/80 shadow-lg hover:scale-105 transition-all"
+            className="absolute right-2 sm:right-4 z-20 p-2 sm:p-3 rounded-full bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700/80 shadow-lg hover:scale-105 transition-all"
             aria-label="Next file"
           >
-            <ChevronRight className="w-6 h-6" />
+            <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
         )}
       </div>
 
       {/* Info Sidebar Panel */}
       {showInfo && (
-        <div className="absolute right-0 top-16 bottom-0 w-80 bg-slate-900/95 border-l border-slate-800 p-6 z-20 backdrop-blur-md overflow-y-auto animate-slide-left space-y-5 text-xs">
+        <div className="absolute right-0 top-14 sm:top-16 bottom-0 w-full sm:w-80 bg-slate-900/98 border-l border-slate-800 p-5 sm:p-6 z-20 backdrop-blur-md overflow-y-auto animate-slide-left space-y-5 text-xs">
           <div className="flex items-center justify-between pb-3 border-b border-slate-800">
             <h4 className="font-semibold text-white text-sm">File Details</h4>
             <button

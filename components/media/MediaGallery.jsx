@@ -130,12 +130,12 @@ function FolderCard({ folder, onClick, onDelete, liveFileCount }) {
   return (
     <div
       onClick={() => onClick?.(folder)}
-      className={`group relative flex flex-col justify-between p-4 rounded-3xl border bg-slate-900/90 ${c.border} ${c.glow} hover:bg-slate-850 hover:shadow-xl cursor-pointer transition-all duration-200 select-none hover:scale-[1.02] active:scale-[0.99]`}
+      className={`group relative flex flex-col justify-between p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl border bg-slate-900/90 ${c.border} ${c.glow} hover:bg-slate-850 hover:shadow-xl cursor-pointer transition-all duration-200 select-none hover:scale-[1.02] active:scale-[0.99]`}
     >
       {/* Top row: Icon + color dot + delete option */}
       <div className="flex items-center justify-between w-full">
-        <div className={`w-11 h-11 rounded-2xl ${c.bg} ${c.border} border flex items-center justify-center transition-transform group-hover:scale-110`}>
-          <Folder className={`w-5 h-5 ${c.icon} fill-current opacity-80 group-hover:opacity-100 transition-opacity`} />
+        <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl ${c.bg} ${c.border} border flex items-center justify-center transition-transform group-hover:scale-110`}>
+          <Folder className={`w-4 h-4 sm:w-5 sm:h-5 ${c.icon} fill-current opacity-80 group-hover:opacity-100 transition-opacity`} />
         </div>
         <div className="flex items-center gap-1.5">
           <div className={`w-2 h-2 rounded-full ${c.dot} opacity-80`} />
@@ -146,7 +146,7 @@ function FolderCard({ folder, onClick, onDelete, liveFileCount }) {
                 onDelete(folder);
               }}
               title="Delete folder"
-              className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 opacity-0 group-hover:opacity-100 transition-all"
+              className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -155,11 +155,11 @@ function FolderCard({ folder, onClick, onDelete, liveFileCount }) {
       </div>
 
       {/* Name + count */}
-      <div className="min-w-0 mt-3">
+      <div className="min-w-0 mt-2.5 sm:mt-3">
         <p className="text-xs sm:text-sm font-semibold text-slate-100 truncate leading-tight group-hover:text-white">
           {folder.name}
         </p>
-        <p className="text-[11px] text-slate-400 font-mono mt-1 flex items-center gap-1">
+        <p className="text-[10px] sm:text-[11px] text-slate-400 font-mono mt-1 flex items-center gap-1">
           <span>{fileCount} {fileCount === 1 ? 'file' : 'files'}</span>
         </p>
       </div>
@@ -181,7 +181,7 @@ function FolderGrid({ folders, onFolderClick, onDeleteFolder, folderCounts = {} 
         </span>
         <div className="flex-1 border-t border-slate-800/80" />
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-4">
         {folders.map((folder) => (
           <FolderCard
             key={folder.id}
@@ -947,45 +947,48 @@ function isItemInAnyFolder(item, folders = []) {
   return (
     <div className="space-y-6">
       {/* ── Folder Breadcrumb & Action Bar ── */}
+      {/* ── Folder Breadcrumb & Action Bar ── */}
       {openFolder && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-card animate-slide-up">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl bg-slate-900/90 border border-slate-800 shadow-card animate-slide-up">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <button
               onClick={() => setOpenFolder(null)}
-              className="p-2 rounded-2xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold"
+              className="p-1.5 sm:p-2 rounded-xl sm:rounded-2xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold shrink-0"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>All Files</span>
+              <span className="hidden xs:inline">All Files</span>
             </button>
             <span className="text-slate-600">/</span>
-            <div className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-xl ${currentFolderStyle.bg} ${currentFolderStyle.border} border flex items-center justify-center`}>
-                <FolderOpen className={`w-4 h-4 ${currentFolderStyle.icon} fill-current opacity-80`} />
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl ${currentFolderStyle.bg} ${currentFolderStyle.border} border flex items-center justify-center shrink-0`}>
+                <FolderOpen className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${currentFolderStyle.icon} fill-current opacity-80`} />
               </div>
-              <div>
-                <h2 className="text-sm font-bold text-white leading-tight">{openFolder.name}</h2>
-                <p className="text-[11px] text-slate-400 font-mono">
+              <div className="min-w-0">
+                <h2 className="text-xs sm:text-sm font-bold text-white leading-tight truncate">{openFolder.name}</h2>
+                <p className="text-[10px] sm:text-[11px] text-slate-400 font-mono">
                   {filteredMedia.length} {filteredMedia.length === 1 ? 'file' : 'files'}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-auto">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             <Button
               variant="outline"
               size="sm"
               icon={Trash2}
               onClick={() => setDeleteFolderTarget(openFolder)}
-              className="text-rose-400 hover:text-rose-300 border-rose-500/30 hover:bg-rose-500/10"
+              className="text-rose-400 hover:text-rose-300 border-rose-500/30 hover:bg-rose-500/10 text-xs px-2.5 sm:px-3"
             >
-              Delete Folder
+              <span className="hidden xs:inline">Delete Folder</span>
+              <span className="xs:hidden">Delete</span>
             </Button>
             <Button
               variant="primary"
               size="sm"
               icon={Upload}
               onClick={() => handleUploadClick(openFolder.id)}
+              className="text-xs px-2.5 sm:px-3"
             >
               Upload Here
             </Button>
@@ -994,9 +997,9 @@ function isItemInAnyFolder(item, folders = []) {
       )}
 
       {/* Top Filter & Search Controls */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 sm:gap-4">
         {/* Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full scrollbar-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full scrollbar-none flex-nowrap -mx-1 px-1">
           {FILTER_TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeFilter === tab.id;
@@ -1005,7 +1008,7 @@ function isItemInAnyFolder(item, folders = []) {
               <button
                 key={tab.id}
                 onClick={() => setActiveFilter(tab.id)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-semibold whitespace-nowrap transition-all ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl text-xs font-semibold whitespace-nowrap transition-all shrink-0 select-none ${
                   isActive
                     ? 'bg-teal-500 text-slate-950 shadow-glow-teal'
                     : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-800'
@@ -1028,206 +1031,213 @@ function isItemInAnyFolder(item, folders = []) {
         </div>
 
         {/* Search & Actions */}
-        <div className="flex items-center gap-2.5">
-          <div className="relative flex-1 md:w-64">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap sm:flex-nowrap">
+          <div className="relative flex-1 min-w-[130px] sm:w-48 md:w-60">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="Search files..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-2xl pl-10 pr-4 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500"
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl sm:rounded-2xl pl-8 sm:pl-9 pr-3.5 py-1.5 sm:py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500"
             />
           </div>
 
-          {/* Filter / Sort Button & Popover */}
-          <div className="relative" ref={sortMenuRef}>
-            <button
-              type="button"
-              onClick={() => setSortMenuOpen((prev) => !prev)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs font-semibold border transition-all ${
-                sortMenuOpen || sortBy !== 'date-desc' || groupBy !== 'date' || filterYear !== 'all' || filterMonth !== 'all'
-                  ? 'bg-teal-500/15 border-teal-500/40 text-teal-300 shadow-glow-teal'
-                  : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
-              }`}
-              title="Filter, Sort & Group files"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Filter & Sort</span>
-              {(sortBy !== 'date-desc' || groupBy !== 'date' || filterYear !== 'all' || filterMonth !== 'all') && (
-                <span className="w-2 h-2 rounded-full bg-teal-400 shadow-glow-teal" />
+          {/* Action Buttons Group */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Filter / Sort Button & Popover */}
+            <div className="relative" ref={sortMenuRef}>
+              <button
+                type="button"
+                onClick={() => setSortMenuOpen((prev) => !prev)}
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl text-xs font-semibold border transition-all ${
+                  sortMenuOpen || sortBy !== 'date-desc' || groupBy !== 'date' || filterYear !== 'all' || filterMonth !== 'all'
+                    ? 'bg-teal-500/15 border-teal-500/40 text-teal-300 shadow-glow-teal'
+                    : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
+                title="Filter, Sort & Group files"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Filter & Sort</span>
+                {(sortBy !== 'date-desc' || groupBy !== 'date' || filterYear !== 'all' || filterMonth !== 'all') && (
+                  <span className="w-2 h-2 rounded-full bg-teal-400 shadow-glow-teal" />
+                )}
+              </button>
+
+              {sortMenuOpen && (
+                <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-xs sm:w-80 bg-slate-900/95 backdrop-blur-xl border border-slate-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 shadow-2xl z-40 space-y-4 animate-scale-in text-xs select-none max-h-[80vh] overflow-y-auto">
+                  <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
+                    <div className="flex items-center gap-2">
+                      <SlidersHorizontal className="w-4 h-4 text-teal-400" />
+                      <span className="font-bold text-white text-xs">Filter & Organize</span>
+                    </div>
+                    {(sortBy !== 'date-desc' || groupBy !== 'date' || filterYear !== 'all' || filterMonth !== 'all') && (
+                      <button
+                        onClick={() => {
+                          setSortBy('date-desc');
+                          setGroupBy('date');
+                          setFilterYear('all');
+                          setFilterMonth('all');
+                        }}
+                        className="text-[11px] text-teal-400 hover:text-teal-300 flex items-center gap-1 font-medium"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Reset All</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Date Filter Section: Year & Month */}
+                  <div className="space-y-2">
+                    <label className="text-[11px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5 px-1">
+                      <Calendar className="w-3.5 h-3.5 text-teal-400" />
+                      <span>Filter by Year & Month</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 bg-slate-950/60 p-2.5 rounded-2xl border border-slate-800/80">
+                      {/* Year Select */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-slate-400 font-semibold uppercase block">Year</span>
+                        <select
+                          value={filterYear}
+                          onChange={(e) => setFilterYear(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-teal-500 cursor-pointer"
+                        >
+                          <option value="all">All Years</option>
+                          {availableYears.map((yr) => (
+                            <option key={yr} value={yr}>
+                              {yr}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Month Select */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-slate-400 font-semibold uppercase block">Month</span>
+                        <select
+                          value={filterMonth}
+                          onChange={(e) => setFilterMonth(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-teal-500 cursor-pointer"
+                        >
+                          {MONTH_NAMES.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Group By Section */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5 px-1">
+                      <Layers className="w-3.5 h-3.5 text-teal-400" />
+                      <span>Group By</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5 bg-slate-950/60 p-1.5 rounded-2xl border border-slate-800/80">
+                      {[
+                        { id: 'date', label: 'Day / Date', icon: Calendar },
+                        { id: 'month', label: 'Month', icon: CalendarDays },
+                        { id: 'year', label: 'Year', icon: CalendarDays },
+                        { id: 'size', label: 'File Size', icon: HardDrive },
+                        { id: 'none', label: 'Flat (No Group)', icon: Layers },
+                      ].map((item) => {
+                        const Icon = item.icon;
+                        const isSelected = groupBy === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => setGroupBy(item.id)}
+                            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-left transition-all ${
+                              isSelected
+                                ? 'bg-teal-500 text-slate-950 font-bold shadow-sm'
+                                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                            }`}
+                          >
+                            <Icon className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">{item.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Sort By Section */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5 px-1">
+                      <ArrowUpDown className="w-3.5 h-3.5 text-teal-400" />
+                      <span>Sort Order</span>
+                    </label>
+                    <div className="space-y-1 bg-slate-950/60 p-1.5 rounded-2xl border border-slate-800/80">
+                      {[
+                        { id: 'date-desc', label: 'Date: Newest First' },
+                        { id: 'date-asc', label: 'Date: Oldest First' },
+                        { id: 'size-desc', label: 'Size: Largest First' },
+                        { id: 'size-asc', label: 'Size: Smallest First' },
+                        { id: 'name-asc', label: 'Name: A → Z' },
+                        { id: 'name-desc', label: 'Name: Z → A' },
+                      ].map((item) => {
+                        const isSelected = sortBy === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => setSortBy(item.id)}
+                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl transition-all ${
+                              isSelected
+                                ? 'bg-teal-500/20 text-teal-300 font-semibold border border-teal-500/30'
+                                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                            }`}
+                          >
+                            <span>{item.label}</span>
+                            {isSelected && <span className="w-2 h-2 rounded-full bg-teal-400 shadow-glow-teal" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               )}
-            </button>
+            </div>
 
-            {sortMenuOpen && (
-              <div className="absolute right-0 mt-2 w-80 bg-slate-900/95 backdrop-blur-xl border border-slate-800 rounded-3xl p-4 shadow-2xl z-40 space-y-4 animate-scale-in text-xs select-none max-h-[85vh] overflow-y-auto">
-                <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
-                  <div className="flex items-center gap-2">
-                    <SlidersHorizontal className="w-4 h-4 text-teal-400" />
-                    <span className="font-bold text-white text-xs">Filter & Organize</span>
-                  </div>
-                  {(sortBy !== 'date-desc' || groupBy !== 'date' || filterYear !== 'all' || filterMonth !== 'all') && (
-                    <button
-                      onClick={() => {
-                        setSortBy('date-desc');
-                        setGroupBy('date');
-                        setFilterYear('all');
-                        setFilterMonth('all');
-                      }}
-                      className="text-[11px] text-teal-400 hover:text-teal-300 flex items-center gap-1 font-medium"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      <span>Reset All</span>
-                    </button>
-                  )}
-                </div>
-
-                {/* Date Filter Section: Year & Month */}
-                <div className="space-y-2">
-                  <label className="text-[11px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5 px-1">
-                    <Calendar className="w-3.5 h-3.5 text-teal-400" />
-                    <span>Filter by Year & Month</span>
-                  </label>
-                  <div className="grid grid-cols-2 gap-2 bg-slate-950/60 p-2.5 rounded-2xl border border-slate-800/80">
-                    {/* Year Select */}
-                    <div className="space-y-1">
-                      <span className="text-[10px] text-slate-400 font-semibold uppercase block">Year</span>
-                      <select
-                        value={filterYear}
-                        onChange={(e) => setFilterYear(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-teal-500 cursor-pointer"
-                      >
-                        <option value="all">All Years</option>
-                        {availableYears.map((yr) => (
-                          <option key={yr} value={yr}>
-                            {yr}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Month Select */}
-                    <div className="space-y-1">
-                      <span className="text-[10px] text-slate-400 font-semibold uppercase block">Month</span>
-                      <select
-                        value={filterMonth}
-                        onChange={(e) => setFilterMonth(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-teal-500 cursor-pointer"
-                      >
-                        {MONTH_NAMES.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Group By Section */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5 px-1">
-                    <Layers className="w-3.5 h-3.5 text-teal-400" />
-                    <span>Group By</span>
-                  </label>
-                  <div className="grid grid-cols-2 gap-1.5 bg-slate-950/60 p-1.5 rounded-2xl border border-slate-800/80">
-                    {[
-                      { id: 'date', label: 'Day / Date', icon: Calendar },
-                      { id: 'month', label: 'Month', icon: CalendarDays },
-                      { id: 'year', label: 'Year', icon: CalendarDays },
-                      { id: 'size', label: 'File Size', icon: HardDrive },
-                      { id: 'none', label: 'Flat (No Group)', icon: Layers },
-                    ].map((item) => {
-                      const Icon = item.icon;
-                      const isSelected = groupBy === item.id;
-                      return (
-                        <button
-                          key={item.id}
-                          onClick={() => setGroupBy(item.id)}
-                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-left transition-all ${
-                            isSelected
-                              ? 'bg-teal-500 text-slate-950 font-bold shadow-sm'
-                              : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-                          }`}
-                        >
-                          <Icon className="w-3.5 h-3.5 shrink-0" />
-                          <span className="truncate">{item.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Sort By Section */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5 px-1">
-                    <ArrowUpDown className="w-3.5 h-3.5 text-teal-400" />
-                    <span>Sort Order</span>
-                  </label>
-                  <div className="space-y-1 bg-slate-950/60 p-1.5 rounded-2xl border border-slate-800/80">
-                    {[
-                      { id: 'date-desc', label: 'Date: Newest First' },
-                      { id: 'date-asc', label: 'Date: Oldest First' },
-                      { id: 'size-desc', label: 'Size: Largest First' },
-                      { id: 'size-asc', label: 'Size: Smallest First' },
-                      { id: 'name-asc', label: 'Name: A → Z' },
-                      { id: 'name-desc', label: 'Name: Z → A' },
-                    ].map((item) => {
-                      const isSelected = sortBy === item.id;
-                      return (
-                        <button
-                          key={item.id}
-                          onClick={() => setSortBy(item.id)}
-                          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl transition-all ${
-                            isSelected
-                              ? 'bg-teal-500/20 text-teal-300 font-semibold border border-teal-500/30'
-                              : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-                          }`}
-                        >
-                          <span>{item.label}</span>
-                          {isSelected && <span className="w-2 h-2 rounded-full bg-teal-400 shadow-glow-teal" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
+            {hasStorage && (
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={RefreshCw}
+                isLoading={isSyncing}
+                onClick={handleSync}
+                title="Synchronize all files from cloud storage buckets"
+                className="px-2.5 sm:px-3 py-1.5 sm:py-2"
+              >
+                <span className="hidden sm:inline">{isSyncing ? 'Syncing...' : 'Sync'}</span>
+              </Button>
             )}
+
+            {hasStorage && !openFolder && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={FolderPlus}
+                onClick={() => setCreateFolderOpen(true)}
+                title="Create a new folder to organise your media"
+                className="px-2.5 sm:px-3 py-1.5 sm:py-2"
+              >
+                <span className="hidden sm:inline">New Folder</span>
+              </Button>
+            )}
+
+            <Button
+              variant="primary"
+              size="sm"
+              icon={Upload}
+              onClick={() => handleUploadClick(openFolder ? openFolder.id : null)}
+              className="px-3 sm:px-3.5 py-1.5 sm:py-2"
+            >
+              <span className="hidden xs:inline">{openFolder ? 'Upload File' : 'Upload Media'}</span>
+              <span className="xs:hidden">Upload</span>
+            </Button>
           </div>
-
-          {hasStorage && (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={RefreshCw}
-              isLoading={isSyncing}
-              onClick={handleSync}
-              title="Synchronize all files from cloud storage buckets"
-            >
-              {isSyncing ? 'Syncing...' : 'Sync'}
-            </Button>
-          )}
-
-          {hasStorage && !openFolder && (
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={FolderPlus}
-              onClick={() => setCreateFolderOpen(true)}
-              title="Create a new folder to organise your media"
-            >
-              New Folder
-            </Button>
-          )}
-
-          <Button
-            variant="primary"
-            size="sm"
-            icon={Upload}
-            onClick={() => handleUploadClick(openFolder ? openFolder.id : null)}
-          >
-            {openFolder ? 'Upload File' : 'Upload Media'}
-          </Button>
         </div>
       </div>
 
@@ -1287,47 +1297,49 @@ function isItemInAnyFolder(item, folders = []) {
 
       {/* Bulk Action Sticky Bar */}
       {selectedIds.size > 0 && (
-        <div className="sticky top-20 z-30 flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/95 border border-teal-500/40 backdrop-blur-md shadow-2xl animate-slide-up">
-          <div className="flex items-center gap-3">
+        <div className="sticky top-14 sm:top-20 z-30 flex items-center justify-between p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl bg-slate-900/95 border border-teal-500/40 backdrop-blur-md shadow-2xl animate-slide-up">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => setSelectedIds(new Set())}
-              className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+              className="p-1 sm:p-1.5 rounded-lg sm:rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
               title="Clear selection (Esc)"
             >
               <X className="w-4 h-4" />
             </button>
 
             <span className="text-xs font-semibold text-white">
-              {selectedIds.size} {selectedIds.size === 1 ? 'item selected' : 'items selected'}
+              {selectedIds.size} <span className="hidden xs:inline">{selectedIds.size === 1 ? 'item selected' : 'items selected'}</span>
             </span>
 
             <span className="text-slate-600 hidden sm:inline">|</span>
 
             <button
               onClick={selectAll}
-              className="hidden sm:flex items-center gap-1.5 text-xs font-semibold text-teal-400 hover:text-teal-300 transition-colors"
+              className="flex items-center gap-1 text-xs font-semibold text-teal-400 hover:text-teal-300 transition-colors"
             >
               <CheckSquare className="w-3.5 h-3.5" />
               <span>
-                {selectedIds.size === filteredMedia.length ? 'Deselect entire library' : 'Select entire library'}
+                {selectedIds.size === filteredMedia.length ? 'Deselect all' : 'Select all'}
               </span>
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <Button
               variant="secondary"
               size="sm"
               icon={Download}
               onClick={handleBulkDownload}
+              className="px-2.5 sm:px-3 text-xs"
             >
-              Download
+              <span className="hidden xs:inline">Download</span>
             </Button>
             <Button
               variant="danger"
               size="sm"
               icon={Trash2}
               onClick={() => setDeleteTarget('bulk')}
+              className="px-2.5 sm:px-3 text-xs"
             >
               Delete ({selectedIds.size})
             </Button>
@@ -1470,7 +1482,7 @@ function isItemInAnyFolder(item, folders = []) {
                         )}
                       </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-4">
                         {items.map((item) => (
                           <MediaCard
                             key={item.id}
@@ -1494,7 +1506,7 @@ function isItemInAnyFolder(item, folders = []) {
           ) : (
             /* At Root Level */
             filteredMedia.length === 0 && folderList.length === 0 ? (
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 sm:p-12 text-center max-w-xl mx-auto shadow-card space-y-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl p-6 sm:p-12 text-center max-w-xl mx-auto shadow-card space-y-4">
                 <div className="w-12 h-12 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center mx-auto text-teal-400">
                   <ImageIcon className="w-6 h-6" />
                 </div>
@@ -1587,7 +1599,7 @@ function isItemInAnyFolder(item, folders = []) {
                         )}
                       </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-4">
                         {items.map((item) => (
                           <MediaCard
                             key={item.id}

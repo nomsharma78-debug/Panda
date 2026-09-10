@@ -188,12 +188,12 @@ export const MediaCard = React.memo(function MediaCard({
           }
         }}
         aria-label={isSelected ? 'Deselect file' : 'Select file'}
-        className={`absolute top-2.5 right-2.5 z-20 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-150 cursor-pointer ${
+        className={`absolute top-2 right-2 sm:top-2.5 sm:right-2.5 z-20 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-150 cursor-pointer ${
           isSelected
             ? 'opacity-100 border-teal-400 bg-slate-950 shadow-glow-teal scale-110'
             : isSelectionMode
-            ? 'opacity-100 border-white/70 bg-black/40 backdrop-blur-xs hover:border-teal-400 hover:scale-110'
-            : 'opacity-0 group-hover:opacity-100 border-white/70 bg-black/40 backdrop-blur-xs hover:border-teal-400 hover:scale-110'
+            ? 'opacity-100 border-white/80 bg-black/50 backdrop-blur-xs hover:border-teal-400 hover:scale-110'
+            : 'opacity-70 sm:opacity-0 sm:group-hover:opacity-100 border-white/70 bg-black/40 backdrop-blur-xs hover:border-teal-400 hover:scale-110'
         }`}
       >
         {isSelected && (
@@ -201,10 +201,10 @@ export const MediaCard = React.memo(function MediaCard({
         )}
       </button>
 
-      {/* Hover Info Overlay */}
-      <div className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end pointer-events-none">
-        <p className="text-xs font-semibold text-slate-100 truncate">{rawFilename || 'Media File'}</p>
-        <div className="flex items-center justify-between mt-0.5 text-[10px] text-slate-400 font-mono">
+      {/* Hover / Active Info Overlay */}
+      <div className="absolute inset-x-0 bottom-0 p-2 sm:p-2.5 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end pointer-events-none">
+        <p className="text-[11px] sm:text-xs font-semibold text-slate-100 truncate">{rawFilename || 'Media File'}</p>
+        <div className="flex items-center justify-between mt-0.5 text-[9px] sm:text-[10px] text-slate-400 font-mono">
           <span>{formatBytes(targetMedia.file_size || targetMedia.size_bytes || 0)}</span>
           {targetMedia.encrypted !== false && (
             <span className="flex items-center gap-1 text-teal-400/80">

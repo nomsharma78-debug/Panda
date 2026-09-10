@@ -488,6 +488,21 @@ export function SettingsManager({ initialTab = 'account' }) {
                 AES-256-GCM Authenticated Encryption
               </Badge>
             </div>
+
+            <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-white">Sign Out</p>
+                <p className="text-[11px] text-slate-400">End your current session and clear local keys.</p>
+              </div>
+              <Button
+                variant="danger"
+                size="sm"
+                icon={LogOut}
+                onClick={logout}
+              >
+                Sign Out
+              </Button>
+            </div>
           </div>
         </div>
       )}
