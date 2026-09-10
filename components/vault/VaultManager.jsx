@@ -14,6 +14,7 @@ import {
   Database,
 } from 'lucide-react';
 import { VaultItemCard } from './VaultItemCard';
+import { AddVaultItemModal } from './AddVaultItemModal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -48,6 +49,7 @@ export function VaultManager({ initialType = VAULT_TYPES.ALL, onOpenAddModal }) 
   const [items, setItems] = useState(cached?.items || []);
   const [decryptedMap, setDecryptedMap] = useState(cached?.decryptedMap || {});
   const [loading, setLoading] = useState(!cached);
+  const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -347,11 +349,35 @@ export function VaultManager({ initialType = VAULT_TYPES.ALL, onOpenAddModal }) 
               key={item.id}
               item={item}
               decryptedData={decryptedMap[item.id]}
+              onEdit={(targetItem, targetData) => setEditTarget({ item: targetItem, decryptedData: targetData })}
               onDelete={(target) => setDeleteTarget(target)}
             />
           ))}
         </div>
       )}
+
+      {/* Edit Vault Item Modal */}
+      <AddVaultItemModal
+        isOpen={Boolean(editTarget)}
+        onClose={() => setEditTarget(null)}
+        editItem={editTarget?.item}
+        editDecryptedData={editTarget?.decryptedData}
+        initialType={editTarget?.item?.type || 'login'}
+        onItemUpdated={(updatedItem, updatedPlaintext) => {
+          if (updatedItem) {
+            setItems((prev) =>
+              prev.map((i) => (i.id === updatedItem.id ? { ...i, ...updatedItem } : i))
+            );
+            if (updatedPlaintext) {
+              setDecryptedMap((prev) => ({
+                ...prev,
+                [updatedItem.id]: updatedPlaintext,
+              }));
+            }
+          }
+          fetchItems(true);
+        }}
+      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

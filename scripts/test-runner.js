@@ -118,6 +118,56 @@ async function runAuditTests() {
   const vaultFetchA = await getVaultItemById(vaultA.id, userA.id);
   assert(vaultFetchA !== null, 'User A can access own vault item');
 
+  // User A edits own vault item (Password)
+  const updatedVaultA = await updateVaultItem(vaultA.id, userA.id, {
+    type: 'login',
+    encryptedPayload: JSON.stringify({ title: 'User A Updated Banking Credentials', password: 'NewSecretPassword2026!' }),
+  });
+  assert(updatedVaultA !== null, 'User A can successfully update own vault password');
+  
+  const vaultFetchAfterUpdate = await getVaultItemById(vaultA.id, userA.id);
+  assert(vaultFetchAfterUpdate.encrypted_payload.includes('User A Updated Banking Credentials'), 'Updated vault password payload is persisted to database');
+
+  // User A Creates and Edits Payment Card
+  const cardA = await createVaultItem(userA.id, {
+    type: 'card',
+    encryptedPayload: JSON.stringify({ title: 'User A Visa Card', cardNumber: '4111 2222 3333 4444' }),
+  });
+  assert(cardA.id, 'User A can create vault payment card');
+  const updatedCardA = await updateVaultItem(cardA.id, userA.id, {
+    type: 'card',
+    encryptedPayload: JSON.stringify({ title: 'User A Updated Visa Card', cardNumber: '4111 2222 3333 9999', cardExpiry: '08/30' }),
+  });
+  assert(updatedCardA !== null, 'User A can edit vault payment card in database');
+  const cardFetchA = await getVaultItemById(cardA.id, userA.id);
+  assert(cardFetchA.encrypted_payload.includes('4111 2222 3333 9999'), 'Updated payment card persisted to database');
+
+  // User A Creates and Edits Secure Note
+  const noteA = await createVaultItem(userA.id, {
+    type: 'note',
+    encryptedPayload: JSON.stringify({ title: 'Recovery Keys', content: 'Secret seed phrase 123' }),
+  });
+  const updatedNoteA = await updateVaultItem(noteA.id, userA.id, {
+    type: 'note',
+    encryptedPayload: JSON.stringify({ title: 'Updated Recovery Keys', content: 'Updated seed phrase 456' }),
+  });
+  assert(updatedNoteA !== null, 'User A can edit secure note in database');
+  const noteFetchA = await getVaultItemById(noteA.id, userA.id);
+  assert(noteFetchA.encrypted_payload.includes('Updated seed phrase 456'), 'Updated secure note persisted to database');
+
+  // User A Creates and Edits Identity
+  const identityA = await createVaultItem(userA.id, {
+    type: 'identity',
+    encryptedPayload: JSON.stringify({ title: 'Passport', fullName: 'Alice Anderson', idNumber: 'P1234567' }),
+  });
+  const updatedIdentityA = await updateVaultItem(identityA.id, userA.id, {
+    type: 'identity',
+    encryptedPayload: JSON.stringify({ title: 'Updated Passport', fullName: 'Alice Anderson-Smith', idNumber: 'P7654321' }),
+  });
+  assert(updatedIdentityA !== null, 'User A can edit identity in database');
+  const identityFetchA = await getVaultItemById(identityA.id, userA.id);
+  assert(identityFetchA.encrypted_payload.includes('P7654321'), 'Updated identity persisted to database');
+
   // User B attempts to access User A's vault item -> MUST FAIL
   const vaultFetchB = await getVaultItemById(vaultA.id, userB.id);
   assert(vaultFetchB === null, 'IDOR DEFENSE: User B cannot retrieve User A vault item');
@@ -125,6 +175,10 @@ async function runAuditTests() {
   // User B attempts to update User A's vault item -> MUST FAIL
   const vaultUpdateB = await updateVaultItem(vaultA.id, userB.id, { encryptedPayload: 'tampered' });
   assert(!vaultUpdateB, 'IDOR DEFENSE: User B cannot update User A vault item');
+
+  // User B attempts to update User A's identity item -> MUST FAIL
+  const identityUpdateB = await updateVaultItem(identityA.id, userB.id, { encryptedPayload: 'tampered identity' });
+  assert(!identityUpdateB, 'IDOR DEFENSE: User B cannot update User A identity item');
 
   // User B attempts to delete User A's vault item -> MUST FAIL
   const vaultDeleteB = await deleteVaultItem(vaultA.id, userB.id);
@@ -164,6 +218,24 @@ async function runAuditTests() {
   // User A can access own media
   const mediaFetchA = await getMediaFileById(mediaA.id, userA.id);
   assert(mediaFetchA !== null, 'User A can access own media metadata');
+
+  // User A Uploads a Second Media Item
+  const fileBufferA2 = Buffer.from('Second Uploaded Document Photo Content');
+  const mediaA2 = await StorageManager.uploadMedia(userA.id, {
+    fileBuffer: fileBufferA2,
+    originalFilename: 'Vacation_Photo_2.jpg',
+    mimeType: 'image/jpeg',
+    mediaType: 'photo',
+    preferredStorageId: storageA.id,
+    enableEncryption: true,
+  });
+
+  // Verify listUserMedia retains BOTH old and newly uploaded media
+  const allUserAMedia = await listUserMedia(userA.id);
+  const mediaIds = allUserAMedia.map((m) => m.id);
+  assert(mediaIds.includes(mediaA.id), 'Old media file remains in media list after new upload');
+  assert(mediaIds.includes(mediaA2.id), 'Newly uploaded media file is included in media list');
+  assert(allUserAMedia.length >= 2, 'listUserMedia retains all previous and current uploads');
 
   const binaryA = await StorageManager.getMediaBinary(userA.id, mediaA.id);
   assert(binaryA.buffer.equals(fileBufferA), 'User A can stream decrypted media binary');

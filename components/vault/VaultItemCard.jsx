@@ -10,6 +10,7 @@ import {
   Check,
   Eye,
   EyeOff,
+  Pencil,
   Trash2,
   ExternalLink,
   Lock,
@@ -17,7 +18,7 @@ import {
 import { useToast } from '@/components/context/ToastContext';
 import { Badge } from '@/components/ui/Badge';
 
-export const VaultItemCard = React.memo(function VaultItemCard({ item, decryptedData, onDelete }) {
+export const VaultItemCard = React.memo(function VaultItemCard({ item, decryptedData, onEdit, onDelete }) {
   const { success } = useToast();
   const [showSensitive, setShowSensitive] = useState(false);
   const [copiedKey, setCopiedKey] = useState(null);
@@ -72,14 +73,27 @@ export const VaultItemCard = React.memo(function VaultItemCard({ item, decrypted
             </div>
           </div>
 
-          <button
-            onClick={() => onDelete(item)}
-            className="p-1.5 text-slate-400 hover:text-rose-400 rounded-xl hover:bg-rose-500/10 transition-colors shrink-0"
-            title="Delete item"
-            aria-label="Delete item"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            {onEdit && (
+              <button
+                onClick={() => onEdit(item, data)}
+                className="p-1.5 text-slate-400 hover:text-teal-300 rounded-xl hover:bg-teal-500/10 transition-colors"
+                title="Edit item"
+                aria-label="Edit item"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            <button
+              onClick={() => onDelete(item)}
+              className="p-1.5 text-slate-400 hover:text-rose-400 rounded-xl hover:bg-rose-500/10 transition-colors"
+              title="Delete item"
+              aria-label="Delete item"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         {/* Content Details */}
@@ -204,8 +218,10 @@ export const VaultItemCard = React.memo(function VaultItemCard({ item, decrypted
   );
 }, (prev, next) => {
   return (
-    prev.item.id === next.item.id &&
-    prev.item.updated_at === next.item.updated_at &&
-    prev.decryptedData === next.decryptedData
+    prev.item?.id === next.item?.id &&
+    prev.item?.updated_at === next.item?.updated_at &&
+    prev.decryptedData === next.decryptedData &&
+    prev.onEdit === next.onEdit &&
+    prev.onDelete === next.onDelete
   );
 });

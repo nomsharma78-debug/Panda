@@ -17,20 +17,27 @@ import {
   ShieldCheck,
   ArrowLeft,
   ChevronRight,
+  Save,
 } from 'lucide-react';
 import { useToast } from '@/components/context/ToastContext';
 import { useAuth } from '@/components/context/AuthContext';
 import { encryptClientVaultItem } from '@/lib/crypto/client-vault';
+import { pandaCache } from '@/lib/client-cache';
+import { PANDA_EVENTS } from '@/lib/constants/index';
 
 export function AddVaultItemModal({
   isOpen,
   onClose,
   initialType = 'login',
   editItem = null,
+  editDecryptedData = null,
   onItemCreated,
+  onItemUpdated,
 }) {
   const { success, error: toastError } = useToast();
   const { session, clientCryptoKey } = useAuth();
+
+  const isEditMode = Boolean(editItem);
 
   // Mode: 'choose' (Step 1 picker) | 'login' | 'card' | 'note' | 'identity'
   const [type, setType] = useState('login');
@@ -66,15 +73,35 @@ export function AddVaultItemModal({
 
   useEffect(() => {
     if (isOpen) {
-      if (initialType === 'choose') {
-        setShowTypePicker(true);
-        setType('login');
-      } else {
+      if (editItem) {
         setShowTypePicker(false);
-        setType(initialType || 'login');
-      }
+        setType(editItem.type || initialType || 'login');
 
-      if (!editItem) {
+        const d = editDecryptedData || {};
+        setTitle(d.title || editItem.title || '');
+        setUsername(d.username || d.email || '');
+        setPassword(d.password || '');
+        setUrl(d.url || '');
+        setCardholder(d.cardholder || '');
+        setCardNumber(d.cardNumber || '');
+        setCardExpiry(d.cardExpiry || '');
+        setCardCvv(d.cardCvv || '');
+        setNoteContent(d.content || '');
+        setTags(Array.isArray(d.tags) ? d.tags.join(', ') : (d.tags || ''));
+        setFullName(d.fullName || '');
+        setIdNumber(d.idNumber || '');
+        setShowPassword(false);
+        setShowCvv(false);
+        setShowGenerator(false);
+      } else {
+        if (initialType === 'choose') {
+          setShowTypePicker(true);
+          setType('login');
+        } else {
+          setShowTypePicker(false);
+          setType(initialType || 'login');
+        }
+
         // Reset inputs
         setTitle('');
         setUsername('');
@@ -88,10 +115,12 @@ export function AddVaultItemModal({
         setTags('');
         setFullName('');
         setIdNumber('');
+        setShowPassword(false);
+        setShowCvv(false);
         setShowGenerator(false);
       }
     }
-  }, [isOpen, initialType, editItem]);
+  }, [isOpen, initialType, editItem, editDecryptedData]);
 
   // Generate strong random password
   const generatePassword = () => {
@@ -207,8 +236,11 @@ export function AddVaultItemModal({
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const res = await fetch('/api/vault', {
-        method: 'POST',
+      const endpoint = isEditMode ? `/api/vault/${editItem.id}` : '/api/vault';
+      const method = isEditMode ? 'PATCH' : 'POST';
+
+      const res = await fetch(endpoint, {
+        method,
         headers,
         credentials: 'include',
         body: JSON.stringify({
@@ -219,8 +251,10 @@ export function AddVaultItemModal({
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to save vault item');
+        throw new Error(errData.error || `Failed to ${isEditMode ? 'update' : 'save'} vault item`);
       }
+
+      const resData = await res.json().catch(() => ({}));
 
       const typeLabel =
         type === 'login'
@@ -231,13 +265,22 @@ export function AddVaultItemModal({
           ? 'Secure Note'
           : 'Identity';
 
-      success(`${typeLabel} saved securely in vault.`);
+      success(`${typeLabel} ${isEditMode ? 'updated' : 'saved'} securely in vault.`);
 
-      window.dispatchEvent(new CustomEvent('panda:vault:updated'));
-      if (onItemCreated) onItemCreated();
+      pandaCache.invalidatePrefix('vault:');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(PANDA_EVENTS.VAULT_UPDATED));
+      }
+
+      if (isEditMode) {
+        if (onItemUpdated) onItemUpdated(resData.item || { ...editItem, type, encrypted_payload: encryptedPayloadString }, payloadData);
+      } else {
+        if (onItemCreated) onItemCreated(resData.item);
+      }
+
       onClose();
     } catch (err) {
-      toastError(err.message || 'Failed to save item');
+      toastError(err.message || `Failed to ${isEditMode ? 'update' : 'save'} item`);
     } finally {
       setIsSubmitting(false);
     }
@@ -276,6 +319,13 @@ export function AddVaultItemModal({
 
   const getModalTitle = () => {
     if (showTypePicker) return 'What would you like to save?';
+    if (isEditMode) {
+      if (type === 'login') return 'Edit Password';
+      if (type === 'card') return 'Edit Payment Card';
+      if (type === 'note') return 'Edit Secure Note';
+      if (type === 'identity') return 'Edit Identity';
+      return 'Edit Vault Item';
+    }
     if (type === 'login') return 'Add Password';
     if (type === 'card') return 'Add Payment Card';
     if (type === 'note') return 'Add Secure Note';
@@ -291,12 +341,14 @@ export function AddVaultItemModal({
       subtitle={
         showTypePicker
           ? 'Choose the category of item you want to encrypt and save.'
+          : isEditMode
+          ? 'Changes are re-encrypted in your browser and updated directly in your database.'
           : 'Encrypted in your browser before saving to your database.'
       }
       maxWidth="max-w-lg"
     >
       {/* STEP 1: WHAT TO SAVE TYPE PICKER */}
-      {showTypePicker ? (
+      {showTypePicker && !isEditMode ? (
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {categoryCards.map((cat) => {
@@ -329,16 +381,22 @@ export function AddVaultItemModal({
       ) : (
         /* STEP 2: CATEGORY SPECIFIC FORM */
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {/* Top Bar with Back option */}
+          {/* Top Bar with Category Badge / Back option */}
           <div className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-950 border border-slate-800">
-            <button
-              type="button"
-              onClick={() => setShowTypePicker(true)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Change Item Type</span>
-            </button>
+            {!isEditMode ? (
+              <button
+                type="button"
+                onClick={() => setShowTypePicker(true)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Change Item Type</span>
+              </button>
+            ) : (
+              <span className="text-xs font-semibold text-slate-400">
+                Item Category
+              </span>
+            )}
 
             <span className="text-xs font-bold text-teal-400 uppercase tracking-wider">
               {type === 'login'
@@ -636,9 +694,9 @@ export function AddVaultItemModal({
               variant="primary"
               size="md"
               isLoading={isSubmitting}
-              icon={ShieldCheck}
+              icon={isEditMode ? Save : ShieldCheck}
             >
-              Save to Vault
+              {isEditMode ? 'Save Changes' : 'Save to Vault'}
             </Button>
           </div>
         </form>

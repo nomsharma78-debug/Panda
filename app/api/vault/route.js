@@ -76,7 +76,7 @@ export async function POST(request) {
 
     try {
       const parsed = typeof encryptedPayload === 'string' ? JSON.parse(encryptedPayload) : encryptedPayload;
-      if (parsed.ciphertext && parsed.iv && parsed.authTag) {
+      if (parsed.ciphertext && parsed.iv) {
         // Already client-side encrypted
         finalPayloadToStore = typeof encryptedPayload === 'string' ? encryptedPayload : JSON.stringify(encryptedPayload);
       } else if (parsed.data) {
