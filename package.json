@@ -8,7 +8,6 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node scripts/test-runner.js",
     "db:migrate": "node scripts/migrate.js up",
     "db:status": "node scripts/migrate.js status"
   },

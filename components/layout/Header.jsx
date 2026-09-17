@@ -149,16 +149,16 @@ export function Header({
           )}
         </div>
 
-        {/* Dedicated Log Out Button */}
+        {/* Dedicated Log Out Button (Mobile Devices Only) */}
         <Button
           variant="ghost"
           size="sm"
           icon={LogOut}
           onClick={logout}
           title="Log out of Panda Vault"
-          className="text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-slate-800/80 hover:border-rose-500/30 transition-all shrink-0"
+          className="md:hidden text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-slate-800/80 hover:border-rose-500/30 transition-all shrink-0"
         >
-          <span className="hidden sm:inline">Log out</span>
+          <span className="sr-only">Log out</span>
         </Button>
       </div>
     </header>
