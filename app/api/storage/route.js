@@ -105,6 +105,9 @@ export async function POST(request) {
       token,
       provider: body.provider,
       name: body.name,
+      bucket: body.bucket,
+      region: body.region,
+      endpoint: body.endpoint,
       encryptedConfig,
       isDefault,
     });
