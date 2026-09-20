@@ -28,7 +28,23 @@ export async function GET(request, { params }) {
     return jsonNotFound('Vault item not found');
   }
 
-  return jsonSuccess({ item });
+  let serverDecrypted = null;
+  if (item.encrypted_payload) {
+    if (typeof item.encrypted_payload === 'string' && item.encrypted_payload.split(':').length === 3) {
+      try {
+        const { decryptData } = await import('@/lib/crypto/encryption');
+        serverDecrypted = decryptData(item.encrypted_payload, null, true);
+      } catch {}
+    } else {
+      try {
+        const parsed = typeof item.encrypted_payload === 'string' ? JSON.parse(item.encrypted_payload) : item.encrypted_payload;
+        if (parsed?.data) serverDecrypted = parsed.data;
+        else if (parsed?.title || parsed?.username) serverDecrypted = parsed;
+      } catch {}
+    }
+  }
+
+  return jsonSuccess({ item: { ...item, decryptedPayload: serverDecrypted } });
 }
 
 export async function PATCH(request, { params }) {
@@ -56,23 +72,25 @@ export async function PATCH(request, { params }) {
     }
 
     let finalPayloadToStore = encryptedPayload;
+    let dataObject = null;
+
     if (encryptedPayload) {
       try {
         const parsed = typeof encryptedPayload === 'string' ? JSON.parse(encryptedPayload) : encryptedPayload;
-        if (parsed.ciphertext && parsed.iv) {
-          finalPayloadToStore = typeof encryptedPayload === 'string' ? encryptedPayload : JSON.stringify(encryptedPayload);
-        } else if (parsed.data) {
-          const { encryptData } = await import('@/lib/crypto/encryption');
-          finalPayloadToStore = encryptData(parsed.data);
-        } else {
-          const { encryptData } = await import('@/lib/crypto/encryption');
-          finalPayloadToStore = encryptData(parsed);
+        if (parsed.data) {
+          dataObject = parsed.data;
+        } else if (!parsed.ciphertext) {
+          dataObject = parsed;
         }
       } catch {
         if (typeof encryptedPayload === 'string' && encryptedPayload.split(':').length !== 3) {
-          const { encryptData } = await import('@/lib/crypto/encryption');
-          finalPayloadToStore = encryptData(encryptedPayload);
+          dataObject = { content: encryptedPayload };
         }
+      }
+
+      if (dataObject) {
+        const { encryptData } = await import('@/lib/crypto/encryption');
+        finalPayloadToStore = encryptData(dataObject);
       }
     }
 
@@ -99,7 +117,12 @@ export async function PATCH(request, { params }) {
       metadata: { itemId: id, itemType: updated.type },
     });
 
-    return jsonSuccess({ item: updated, message: 'Vault item updated securely' });
+    const returnedItem = {
+      ...updated,
+      decryptedPayload: dataObject || null,
+    };
+
+    return jsonSuccess({ item: returnedItem, message: 'Vault item updated securely' });
   } catch (err) {
     return handleApiError(err, 'UpdateVaultItem');
   }

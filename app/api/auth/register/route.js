@@ -23,7 +23,7 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { email, password, confirmPassword, name } = body || {};
+    const { email, password, confirmPassword, name, token, otp } = body || {};
 
     if (!validateEmail(email)) {
       return NextResponse.json({ error: 'Please enter a valid email address.' }, { status: 400 });
@@ -31,6 +31,14 @@ export async function POST(request) {
 
     if (!password || (confirmPassword && password !== confirmPassword)) {
       return NextResponse.json({ error: 'Passwords do not match.' }, { status: 400 });
+    }
+
+    const verificationToken = token || otp;
+    if (!verificationToken) {
+      return NextResponse.json(
+        { error: 'Email verification is required. Please verify the 6-digit code sent to your email.' },
+        { status: 400 }
+      );
     }
 
     const cleanEmail = email.trim().toLowerCase();

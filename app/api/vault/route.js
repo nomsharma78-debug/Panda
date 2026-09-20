@@ -29,11 +29,21 @@ export async function GET(request) {
 
     const processedItems = items.map((item) => {
       let serverDecrypted = null;
-      if (item.encrypted_payload && typeof item.encrypted_payload === 'string') {
-        const parts = item.encrypted_payload.split(':');
-        if (parts.length === 3) {
+      if (item.encrypted_payload) {
+        if (typeof item.encrypted_payload === 'string' && item.encrypted_payload.split(':').length === 3) {
           try {
             serverDecrypted = decryptData(item.encrypted_payload, null, true);
+          } catch {}
+        } else {
+          try {
+            const parsed = typeof item.encrypted_payload === 'string'
+              ? JSON.parse(item.encrypted_payload)
+              : item.encrypted_payload;
+            if (parsed?.data) {
+              serverDecrypted = parsed.data;
+            } else if (parsed?.title || parsed?.username) {
+              serverDecrypted = parsed;
+            }
           } catch {}
         }
       }
@@ -73,23 +83,23 @@ export async function POST(request) {
 
     // Ensure payload is ALWAYS encrypted with AES-256-GCM before writing to database
     let finalPayloadToStore = encryptedPayload;
+    let dataObject = null;
 
     try {
       const parsed = typeof encryptedPayload === 'string' ? JSON.parse(encryptedPayload) : encryptedPayload;
-      if (parsed.ciphertext && parsed.iv) {
-        // Already client-side encrypted
-        finalPayloadToStore = typeof encryptedPayload === 'string' ? encryptedPayload : JSON.stringify(encryptedPayload);
-      } else if (parsed.data) {
-        // Plaintext payload -> Encrypt with AES-256-GCM on server
-        finalPayloadToStore = encryptData(parsed.data);
-      } else {
-        finalPayloadToStore = encryptData(parsed);
+      if (parsed.data) {
+        dataObject = parsed.data;
+      } else if (!parsed.ciphertext) {
+        dataObject = parsed;
       }
     } catch {
-      // If not JSON and not AES formatted, encrypt it
       if (typeof encryptedPayload === 'string' && encryptedPayload.split(':').length !== 3) {
-        finalPayloadToStore = encryptData(encryptedPayload);
+        dataObject = { content: encryptedPayload };
       }
+    }
+
+    if (dataObject) {
+      finalPayloadToStore = encryptData(dataObject);
     }
 
     const item = await createVaultItem(
@@ -110,7 +120,12 @@ export async function POST(request) {
       metadata: { itemId: item.id, itemType: item.type },
     });
 
-    return jsonSuccess({ item, message: 'Vault item encrypted and saved securely' }, 201);
+    const returnedItem = {
+      ...item,
+      decryptedPayload: dataObject || null,
+    };
+
+    return jsonSuccess({ item: returnedItem, message: 'Vault item encrypted and saved securely' }, 201);
   } catch (err) {
     return handleApiError(err, 'CreateVaultItem');
   }

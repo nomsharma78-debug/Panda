@@ -68,6 +68,12 @@ export async function POST(request) {
               { status: 500 }
             );
           }
+          if (errMsg.includes('sending confirmation email') || errMsg.includes('error sending') || errMsg.includes('smtp')) {
+            return NextResponse.json(
+              { error: 'Failed to send OTP email. Please verify your Google App Password and SMTP settings in Supabase Dashboard (Project Settings -> Authentication -> SMTP Settings).' },
+              { status: 400 }
+            );
+          }
           return NextResponse.json({ error: error.message }, { status: 400 });
         }
       }

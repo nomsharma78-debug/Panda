@@ -219,17 +219,10 @@ export function AddVaultItemModal({
         payloadData = { ...payloadData, fullName: fullName.trim(), idNumber: idNumber.trim(), content: noteContent.trim() };
       }
 
-      // Encrypt payload (client zero-knowledge if key derived, or base64 JSON payload encrypted by server)
-      let encryptedPayloadString = '';
-      if (clientCryptoKey) {
-        const encrypted = await encryptClientVaultItem(payloadData, clientCryptoKey);
-        encryptedPayloadString = JSON.stringify(encrypted);
-      } else {
-        encryptedPayloadString = JSON.stringify({
-          data: payloadData,
-          clientEncrypted: false,
-        });
-      }
+      // Send structured payload to be encrypted with server AES-256-GCM at rest in database
+      const encryptedPayloadString = JSON.stringify({
+        data: payloadData,
+      });
 
       const headers = { 'Content-Type': 'application/json' };
       if (session?.access_token) {
