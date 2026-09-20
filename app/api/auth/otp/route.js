@@ -31,16 +31,7 @@ export async function POST(request) {
 
     // 1. ACTION: Send OTP
     if (action === 'send') {
-      if (isSignUp) {
-        // If registering a new user, verify email is not already taken in DB
-        const existingUser = await findUserByEmail(normalizedEmail);
-        if (existingUser) {
-          return NextResponse.json(
-            { error: 'An account with this email address already exists. Please sign in.' },
-            { status: 400 }
-          );
-        }
-      } else {
+      if (!isSignUp) {
         // If logging in (not signing up), verify user is actually registered in DB
         const existingUser = await findUserByEmail(normalizedEmail);
         if (!existingUser) {
