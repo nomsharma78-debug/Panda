@@ -31,8 +31,17 @@ export async function POST(request) {
 
     // 1. ACTION: Send OTP
     if (action === 'send') {
-      // If logging in (not signing up), verify user is actually registered in DB
-      if (!isSignUp) {
+      if (isSignUp) {
+        // If registering a new user, verify email is not already taken in DB
+        const existingUser = await findUserByEmail(normalizedEmail);
+        if (existingUser) {
+          return NextResponse.json(
+            { error: 'An account with this email address already exists. Please sign in.' },
+            { status: 400 }
+          );
+        }
+      } else {
+        // If logging in (not signing up), verify user is actually registered in DB
         const existingUser = await findUserByEmail(normalizedEmail);
         if (!existingUser) {
           return NextResponse.json(
@@ -62,6 +71,12 @@ export async function POST(request) {
               { status: 404 }
             );
           }
+          if (errMsg.includes('fetch failed') || errMsg.includes('econnreset') || errMsg.includes('econnrefused')) {
+            return NextResponse.json(
+              { error: 'Authentication service connection error. Please verify your Supabase project status and redeploy Vercel.' },
+              { status: 500 }
+            );
+          }
           return NextResponse.json({ error: error.message }, { status: 400 });
         }
       }
@@ -83,14 +98,27 @@ export async function POST(request) {
 
       const supabase = getSupabaseServerClient();
       if (supabase) {
-        const { data, error } = await supabase.auth.verifyOtp({
+        let { data, error } = await supabase.auth.verifyOtp({
           email: normalizedEmail,
           token: cleanToken,
           type: 'email',
         });
 
         if (error) {
-          return NextResponse.json({ error: error.message || 'Invalid verification code.' }, { status: 400 });
+          // Fallback to 'signup' type verification if 'email' type fails
+          const signupAttempt = await supabase.auth.verifyOtp({
+            email: normalizedEmail,
+            token: cleanToken,
+            type: 'signup',
+          });
+          if (!signupAttempt.error && signupAttempt.data?.user) {
+            data = signupAttempt.data;
+            error = null;
+          }
+        }
+
+        if (error) {
+          return NextResponse.json({ error: error.message || 'Invalid or expired verification code.' }, { status: 400 });
         }
 
         if (data?.user) {
