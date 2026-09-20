@@ -40,13 +40,34 @@ export function Sidebar({ storageMetrics = null }) {
   }, [storageMetrics]);
 
   useEffect(() => {
+    const fetchLatestMetrics = async () => {
+      try {
+        const res = await fetch('/api/storage', { credentials: 'include', headers: { 'Cache-Control': 'no-cache' } });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.combined) {
+            setMetrics(data.combined);
+            pandaCache.set('storage:metrics', data.combined, 120_000);
+          }
+        }
+      } catch {}
+    };
+
+    if (!storageMetrics) {
+      fetchLatestMetrics();
+    }
+
     const handleStorageChange = () => {
       const updated =
         pandaCache.get('storage:metrics') ||
         pandaCache.get('storage:connections')?.combined ||
         pandaCache.get('dashboard:overview')?.storage ||
         null;
-      if (updated) setMetrics(updated);
+      if (updated) {
+        setMetrics(updated);
+      } else {
+        fetchLatestMetrics();
+      }
     };
 
     window.addEventListener(PANDA_EVENTS.STORAGE_UPDATED, handleStorageChange);
@@ -55,7 +76,7 @@ export function Sidebar({ storageMetrics = null }) {
       window.removeEventListener(PANDA_EVENTS.STORAGE_UPDATED, handleStorageChange);
       window.removeEventListener(PANDA_EVENTS.MEDIA_UPLOADED, handleStorageChange);
     };
-  }, []);
+  }, [storageMetrics]);
 
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
