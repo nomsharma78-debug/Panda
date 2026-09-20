@@ -1,42 +1,32 @@
 import { NextResponse } from 'next/server';
-import { syncSupabaseUser, createUser } from '@/lib/db/users';
-import { createSession } from '@/lib/db/sessions';
-import { getSessionCookieOptions } from '@/lib/auth/session';
+import { getAuthenticatedUser } from '@/lib/auth/session';
+import { syncSupabaseUser } from '@/lib/db/users';
 
 export async function POST(request) {
+  const authData = await getAuthenticatedUser(request);
+  if (!authData || !authData.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
-    const body = await request.json();
-    const { id, email, name, password } = body || {};
+    const body = await request.json().catch(() => ({}));
+    const { name, password } = body || {};
 
-    if (!email) {
-      return NextResponse.json({ error: 'Email is required.' }, { status: 400 });
-    }
-
-    // Sync to Supabase & Postgres databases
     const user = await syncSupabaseUser({
-      id: id || `user-${Date.now()}`,
-      email: email.trim().toLowerCase(),
-      name: name ? name.trim() : null,
+      id: authData.user.id,
+      email: authData.user.email,
+      name: name ? name.trim() : authData.user.name,
       password: password || null,
     });
 
-    const userAgent = request.headers.get('user-agent') || '';
-    const { getClientIp } = await import('@/lib/security/rate-limit');
-    const ipAddress = getClientIp(request);
-
-    const { rawToken, expiresAt } = await createSession(user.id, { userAgent, ipAddress });
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: true,
       user,
       message: 'User synced successfully.',
     });
-
-    const cookieOptions = getSessionCookieOptions(expiresAt);
-    response.cookies.set(cookieOptions.name, rawToken, cookieOptions);
-
-    return response;
   } catch (err) {
     console.error('User sync route error:', err);
     return NextResponse.json({ error: 'Failed to sync user.' }, { status: 500 });
   }
 }
+

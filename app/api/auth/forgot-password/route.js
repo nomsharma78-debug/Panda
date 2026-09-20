@@ -3,6 +3,7 @@ import { findUserByEmail } from '@/lib/db/users';
 import { checkRateLimit, getClientIp } from '@/lib/security/rate-limit';
 import { validateEmail } from '@/lib/validation/schemas';
 import { logAuditEvent } from '@/lib/security/audit';
+import { isSupabaseConfigured, getSupabaseServerClient } from '@/lib/auth/supabase';
 
 export async function POST(request) {
   const ip = getClientIp(request);
@@ -28,6 +29,17 @@ export async function POST(request) {
     const normalizedEmail = email.trim().toLowerCase();
     const user = await findUserByEmail(normalizedEmail);
 
+    if (user && isSupabaseConfigured()) {
+      const supabase = getSupabaseServerClient();
+      if (supabase) {
+        try {
+          await supabase.auth.resetPasswordForEmail(normalizedEmail);
+        } catch (sbErr) {
+          console.warn('Supabase resetPasswordForEmail notice:', sbErr.message);
+        }
+      }
+    }
+
     // Always respond with success to prevent user enumeration
     if (user) {
       await logAuditEvent({
@@ -49,3 +61,4 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Failed to process request.' }, { status: 500 });
   }
 }
+
