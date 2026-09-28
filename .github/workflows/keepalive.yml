@@ -1,0 +1,28 @@
+name: Database & Server Keep-Alive
+
+on:
+  schedule:
+    # Runs every 2 days at midnight UTC (100% free, prevents Supabase 7-day inactivity pause)
+    - cron: '0 0 */2 * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab anytime
+
+jobs:
+  ping-health:
+    name: Ping Health & Keep Database Active
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Ping Backend Health Endpoint
+        run: |
+          echo "Sending keep-alive ping to https://pandaus.vercel.app/api/health..."
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" https://pandaus.vercel.app/api/health)
+          echo "Response:"
+          echo "$RESPONSE"
+          
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "✅ Keep-alive ping successful. Database connection refreshed!"
+          else
+            echo "⚠️ Health check returned HTTP status $HTTP_STATUS"
+          fi
