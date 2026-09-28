@@ -10,7 +10,15 @@ import { isSupabaseConfigured, getSupabaseAdminClient, getSupabaseServerClient }
 
 export async function POST(request) {
   const ip = getClientIp(request);
-  const userAgent = request.headers.get('user-agent') || '';
+  const rawUa = request.headers.get('user-agent') || '';
+  const headerDeviceName = request.headers.get('x-device-name');
+  const headerDeviceId = request.headers.get('x-device-id');
+  const headerDeviceOs = request.headers.get('x-device-os');
+
+  let userAgent = rawUa;
+  if (headerDeviceName || headerDeviceId) {
+    userAgent = `PandaMobile/1.0.0 (${headerDeviceName || 'Mobile Device'}; ${headerDeviceOs || 'Mobile'}; DeviceId/${headerDeviceId || 'default'})`;
+  }
 
   // Rate Limiting
   const rateLimit = checkRateLimit(ip, 'auth:register', 15, 60000);

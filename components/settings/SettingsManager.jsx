@@ -636,13 +636,21 @@ export function SettingsManager({ initialTab = 'account' }) {
                           </div>
 
                           <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400 font-mono text-[11px]">
+                            {s.os && <span>{s.os}</span>}
+                            {s.browser && s.browser !== s.deviceName && (
+                              <>
+                                <span>•</span>
+                                <span>{s.browser}</span>
+                              </>
+                            )}
                             {s.ipAddress && s.ipAddress !== 'Unknown IP' && s.ipAddress !== '—' && (
-                              <span>IP: {s.ipAddress}</span>
+                              <>
+                                <span>•</span>
+                                <span>IP: {s.ipAddress}</span>
+                              </>
                             )}
                             <span>•</span>
                             <span>Signed in: {s.createdAt ? new Date(s.createdAt).toLocaleDateString() : 'Today'}</span>
-                            <span>•</span>
-                            <span>Expires: {s.expiresAt ? new Date(s.expiresAt).toLocaleDateString() : 'Active'}</span>
                           </div>
                         </div>
                       </div>

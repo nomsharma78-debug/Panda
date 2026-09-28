@@ -11,8 +11,17 @@ export async function GET(request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const currentUserAgent = request.headers.get('user-agent') || '';
+  const rawUa = request.headers.get('user-agent') || '';
   const currentIp = getClientIp(request);
+
+  const headerDeviceName = request.headers.get('x-device-name');
+  const headerDeviceId = request.headers.get('x-device-id');
+  const headerDeviceOs = request.headers.get('x-device-os');
+
+  let currentUserAgent = rawUa;
+  if (headerDeviceName || headerDeviceId) {
+    currentUserAgent = `PandaMobile/1.0.0 (${headerDeviceName || 'Mobile Device'}; ${headerDeviceOs || 'Mobile'}; DeviceId/${headerDeviceId || 'default'})`;
+  }
 
   // Touch current device session in DB (verifies active status)
   await touchDeviceSession(authData.user.id, currentUserAgent, currentIp).catch(() => { });
@@ -21,8 +30,7 @@ export async function GET(request) {
     const rawSessions = await listUserSessions(authData.user.id);
     const sessions = rawSessions || [];
 
-    // Deduplicate sessions per physical device/browser to avoid stale clutter
-    // Key: deviceName (e.g. "Microsoft Edge on Windows", "iPhone • Safari", "Android • Chrome")
+    // Deduplicate sessions per physical device to avoid stale duplicate rows
     const deviceMap = new Map();
     const duplicateIdsToDelete = [];
 
@@ -33,23 +41,23 @@ export async function GET(request) {
       return timeB - timeA;
     });
 
-    const incomingParsed = parseUserAgent(currentUserAgent);
+    const incomingParsed = parseUserAgent(currentUserAgent, request.headers);
 
     for (const s of sessions) {
       const parsed = parseUserAgent(s.user_agent || currentUserAgent);
       const isCurrentDevice =
         s.id === authData.session?.id ||
-        (s.user_agent && currentUserAgent && s.user_agent.trim() === currentUserAgent.trim()) ||
-        parsed.deviceName === incomingParsed.deviceName;
+        (incomingParsed.deviceId && parsed.deviceId && incomingParsed.deviceId === parsed.deviceId) ||
+        (s.user_agent && currentUserAgent && s.user_agent.trim() === currentUserAgent.trim() && s.ip_address === currentIp);
 
       const deviceKey = isCurrentDevice
         ? '__current_active_device__'
-        : `${parsed.deviceName}_${s.ip_address || ''}`;
+        : (parsed.deviceId ? `dev_${parsed.deviceId}` : `${s.id || parsed.deviceName}_${s.ip_address || ''}`);
 
       if (!deviceMap.has(deviceKey)) {
         deviceMap.set(deviceKey, { session: s, isCurrent: isCurrentDevice, parsed });
       } else {
-        // Stale duplicate record for same device -> mark for deletion
+        // Stale duplicate record for exact same physical device -> mark for cleanup
         if (s.id && !isCurrentDevice) {
           duplicateIdsToDelete.push(s.id);
         }

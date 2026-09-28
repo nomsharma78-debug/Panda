@@ -143,7 +143,15 @@ export async function POST(request) {
       });
 
       // Create session cookie
-      const userAgent = request.headers.get('user-agent') || '';
+      const rawUa = request.headers.get('user-agent') || '';
+      const headerDeviceName = request.headers.get('x-device-name');
+      const headerDeviceId = request.headers.get('x-device-id');
+      const headerDeviceOs = request.headers.get('x-device-os');
+
+      let userAgent = rawUa;
+      if (headerDeviceName || headerDeviceId) {
+        userAgent = `PandaMobile/1.0.0 (${headerDeviceName || 'Mobile Device'}; ${headerDeviceOs || 'Mobile'}; DeviceId/${headerDeviceId || 'default'})`;
+      }
       const { rawToken, expiresAt } = await createSession(user.id, { userAgent, ipAddress: ip });
       const response = NextResponse.json({
         success: true,
