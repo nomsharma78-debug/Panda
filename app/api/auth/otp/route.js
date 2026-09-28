@@ -148,6 +148,14 @@ export async function POST(request) {
       const response = NextResponse.json({
         success: true,
         user: { id: user.id, email: user.email, name: user.name },
+        token: rawToken,
+        rawToken,
+        session: {
+          id: user.id,
+          userId: user.id,
+          token: rawToken,
+          expiresAt: expiresAt.toISOString(),
+        },
       });
 
       const cookieOptions = getSessionCookieOptions(expiresAt);
