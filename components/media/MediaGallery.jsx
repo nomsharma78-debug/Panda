@@ -71,39 +71,26 @@ const MONTH_NAMES = [
   { id: '11', label: 'December', short: 'Dec' },
 ];
 
-// Granular list reconciliation helper to preserve object identities and prevent newly uploaded items from disappearing
+// Granular list reconciliation helper to preserve object identities and prevent redundant re-renders
 function reconcileMediaItems(prevList, incomingList) {
-  if (!prevList || prevList.length === 0) return incomingList || [];
-  if (!incomingList || incomingList.length === 0) return prevList;
+  if (!incomingList) return [];
+  if (!prevList || prevList.length === 0) return incomingList;
 
-  const incomingIds = new Set(incomingList.map((m) => m.id));
   const prevMap = new Map(prevList.map((m) => [m.id, m]));
 
-  const merged = incomingList.map((inc) => {
+  return incomingList.map((inc) => {
     const existing = prevMap.get(inc.id);
     if (
       existing &&
       existing.updated_at === inc.updated_at &&
       existing.original_filename === inc.original_filename &&
-      existing.file_size === inc.file_size
+      existing.file_size === inc.file_size &&
+      existing.folder_id === inc.folder_id
     ) {
       return existing;
     }
     return inc;
   });
-
-  // Preserve recently uploaded items from prevList if they haven't synced to the incoming response yet
-  const now = Date.now();
-  for (const prevItem of prevList) {
-    if (prevItem?.id && !incomingIds.has(prevItem.id)) {
-      const itemTime = new Date(prevItem.uploaded_at || prevItem.created_at || now).getTime();
-      if (now - itemTime < 180_000) { // Keep recent items for at least 3 minutes
-        merged.unshift(prevItem);
-      }
-    }
-  }
-
-  return merged;
 }
 
 // ── Folder colour palette ──────────

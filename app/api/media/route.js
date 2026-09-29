@@ -30,7 +30,7 @@ export async function GET(request) {
       }
     }
 
-    let items = await listUserMedia(authData.user.id, {
+    const items = await listUserMedia(authData.user.id, {
       token,
       mediaType,
       search,
@@ -38,25 +38,6 @@ export async function GET(request) {
       limit,
       offset,
     });
-
-    // Auto-discover files ONLY on initial empty library load with no filter/search/folder
-    if (mediaType === 'all' && !folderId && (!items || items.length === 0) && offset === 0 && !search && !shouldSync) {
-      try {
-        const discovered = await StorageManager.syncStorageMedia(authData.user.id, token);
-        if (discovered && discovered.length > 0) {
-          items = await listUserMedia(authData.user.id, {
-            token,
-            mediaType,
-            search,
-            folderId,
-            limit,
-            offset,
-          });
-        }
-      } catch (autoSyncErr) {
-        console.warn('[API media] Auto-sync notice:', autoSyncErr.message);
-      }
-    }
 
     return NextResponse.json(
       {
