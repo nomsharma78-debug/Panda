@@ -12,6 +12,7 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const mediaType = searchParams.get('type') || 'all';
   const search = searchParams.get('search') || '';
+  const folderId = searchParams.get('folderId') || searchParams.get('folder_id') || null;
   const limit = parseInt(searchParams.get('limit') || '500', 10);
   const offset = parseInt(searchParams.get('offset') || '0', 10);
 
@@ -33,12 +34,13 @@ export async function GET(request) {
       token,
       mediaType,
       search,
+      folderId,
       limit,
       offset,
     });
 
-    // Auto-discover files ONLY on initial empty library load with no filter/search
-    if (mediaType === 'all' && (!items || items.length === 0) && offset === 0 && !search && !shouldSync) {
+    // Auto-discover files ONLY on initial empty library load with no filter/search/folder
+    if (mediaType === 'all' && !folderId && (!items || items.length === 0) && offset === 0 && !search && !shouldSync) {
       try {
         const discovered = await StorageManager.syncStorageMedia(authData.user.id, token);
         if (discovered && discovered.length > 0) {
@@ -46,6 +48,7 @@ export async function GET(request) {
             token,
             mediaType,
             search,
+            folderId,
             limit,
             offset,
           });

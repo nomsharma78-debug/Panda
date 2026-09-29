@@ -476,19 +476,24 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
 
 // Helper to check if an item belongs to a specific folder
 function isItemInSpecificFolder(item, folder) {
-  if (!folder) return false;
-  if (item.folder_id && item.folder_id === folder.id) return true;
-  const key = item.object_key || item.storage_object_key || '';
+  if (!folder || !item) return false;
+  const fId = item.folder_id || item.folderId;
+  if (fId != null && String(fId).trim() !== '' && String(fId) === String(folder.id)) return true;
+  const key = item.object_key || item.storage_object_key || item.objectKey || '';
   const cleanKey = key.replace(/^media\//, '');
   const parts = cleanKey.split('/');
-  if (parts.length > 1 && parts[0].toLowerCase().trim() === folder.name?.toLowerCase().trim()) return true;
+  if (parts.length > 1 && folder.name && parts[0].toLowerCase().trim() === folder.name.toLowerCase().trim()) return true;
   return false;
 }
 
 // Helper to check if an item belongs to any existing folder
 function isItemInAnyFolder(item, folders = []) {
-  if (item.folder_id) return true;
-  const key = item.object_key || item.storage_object_key || '';
+  if (!item || !folders || folders.length === 0) return false;
+  const fId = item.folder_id || item.folderId;
+  if (fId != null && String(fId).trim() !== '' && folders.some((f) => String(f.id) === String(fId))) {
+    return true;
+  }
+  const key = item.object_key || item.storage_object_key || item.objectKey || '';
   const cleanKey = key.replace(/^media\//, '');
   const parts = cleanKey.split('/');
   if (parts.length > 1 && folders.some((f) => f.name && f.name.toLowerCase().trim() === parts[0].toLowerCase().trim())) {
