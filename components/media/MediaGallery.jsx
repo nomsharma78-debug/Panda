@@ -71,33 +71,15 @@ const MONTH_NAMES = [
   { id: '11', label: 'December', short: 'Dec' },
 ];
 
-// Granular list reconciliation helper to preserve object identities and prevent redundant re-renders
+// Granular list reconciliation helper to preserve object identities and prevent newly uploaded items from disappearing
 function reconcileMediaItems(prevList, incomingList) {
   if (!prevList || prevList.length === 0) return incomingList || [];
-  if (!incomingList || incomingList.length === 0) return [];
+  if (!incomingList || incomingList.length === 0) return prevList;
 
+  const incomingIds = new Set(incomingList.map((m) => m.id));
   const prevMap = new Map(prevList.map((m) => [m.id, m]));
 
-  if (prevList.length === incomingList.length) {
-    let same = true;
-    for (let i = 0; i < prevList.length; i++) {
-      const p = prevList[i];
-      const inc = incomingList[i];
-      if (
-        !inc ||
-        p.id !== inc.id ||
-        p.updated_at !== inc.updated_at ||
-        p.original_filename !== inc.original_filename ||
-        p.file_size !== inc.file_size
-      ) {
-        same = false;
-        break;
-      }
-    }
-    if (same) return prevList;
-  }
-
-  return incomingList.map((inc) => {
+  const merged = incomingList.map((inc) => {
     const existing = prevMap.get(inc.id);
     if (
       existing &&
@@ -109,6 +91,19 @@ function reconcileMediaItems(prevList, incomingList) {
     }
     return inc;
   });
+
+  // Preserve recently uploaded items from prevList if they haven't synced to the incoming response yet
+  const now = Date.now();
+  for (const prevItem of prevList) {
+    if (prevItem?.id && !incomingIds.has(prevItem.id)) {
+      const itemTime = new Date(prevItem.uploaded_at || prevItem.created_at || now).getTime();
+      if (now - itemTime < 180_000) { // Keep recent items for at least 3 minutes
+        merged.unshift(prevItem);
+      }
+    }
+  }
+
+  return merged;
 }
 
 // ── Folder colour palette ──────────
@@ -407,10 +402,11 @@ export function MediaGallery({ onOpenUpload, onOpenConnectStorage }) {
       setMediaList((prev) => {
         const existingIds = new Set(prev.map((m) => m.id));
         const toAdd = newItems.filter((m) => !existingIds.has(m.id));
-        return [...toAdd, ...prev];
+        const updated = [...toAdd, ...prev];
+        pandaCache.set('media:list', updated, 120_000);
+        return updated;
       });
     }
-    pandaCache.invalidate('media:list');
     fetchContent({ silent: true, force: true });
     fetchFolders(true);
   }, [fetchContent, fetchFolders]);
