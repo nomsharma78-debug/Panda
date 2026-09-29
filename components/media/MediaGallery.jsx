@@ -512,8 +512,6 @@ function isItemInAnyFolder(item, folders = []) {
     let baseList = mediaList;
     if (openFolder) {
       baseList = mediaList.filter((item) => isItemInSpecificFolder(item, openFolder));
-    } else {
-      baseList = mediaList.filter((item) => !isItemInAnyFolder(item, folderList));
     }
 
     const counts = { [MEDIA_CATEGORIES.ALL]: baseList.length };
@@ -562,17 +560,15 @@ function isItemInAnyFolder(item, folders = []) {
       }
     });
     return counts;
-  }, [mediaList, openFolder, folderList]);
+  }, [mediaList, openFolder]);
 
   // Filtered media based on active folder, category filter, and search
   const filteredMedia = useMemo(() => {
     let list = mediaList;
 
-    // Filter by open folder if one is selected, or exclude folder files at root level
+    // Filter by open folder if one is selected
     if (openFolder) {
       list = list.filter((item) => isItemInSpecificFolder(item, openFolder));
-    } else {
-      list = list.filter((item) => !isItemInAnyFolder(item, folderList));
     }
 
     // Filter by active category
