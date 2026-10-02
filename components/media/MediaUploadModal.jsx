@@ -105,13 +105,8 @@ export function MediaUploadModal({
     for (let i = 0; i < files.length; i++) {
       setCurrentFileIndex(i);
       const file = files[i];
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('storageId', selectedStorage);
-      formData.append('encrypt', String(encryptPayload));
-      if (selectedFolderId) {
-        formData.append('folderId', selectedFolderId);
-      }
+      const CHUNK_THRESHOLD = 3.5 * 1024 * 1024; // 3.5 MB
+      const CHUNK_SIZE = 3 * 1024 * 1024; // 3 MB chunks
 
       try {
         const headers = {};
@@ -119,25 +114,78 @@ export function MediaUploadModal({
           headers['Authorization'] = `Bearer ${session.access_token}`;
         }
 
-        const res = await fetch('/api/media/upload', {
-          method: 'POST',
-          headers,
-          credentials: 'include',
-          body: formData,
-        });
+        if (file.size > CHUNK_THRESHOLD) {
+          const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+          const uploadId = `web_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+          let lastResData = null;
 
-        const resData = await res.json().catch(() => ({}));
+          for (let c = 0; c < totalChunks; c++) {
+            const start = c * CHUNK_SIZE;
+            const end = Math.min(file.size, start + CHUNK_SIZE);
+            const chunkBlob = file.slice(start, end);
 
-        if (!res.ok) {
-          throw new Error(resData.error || `Upload failed for ${file.name}`);
+            const chunkFormData = new FormData();
+            chunkFormData.append('chunk', chunkBlob, file.name);
+            chunkFormData.append('uploadId', uploadId);
+            chunkFormData.append('chunkIndex', String(c));
+            chunkFormData.append('totalChunks', String(totalChunks));
+            chunkFormData.append('filename', file.name);
+            chunkFormData.append('mimeType', file.type || 'application/octet-stream');
+            chunkFormData.append('storageId', selectedStorage);
+            chunkFormData.append('encrypt', String(encryptPayload));
+            if (selectedFolderId) {
+              chunkFormData.append('folderId', selectedFolderId);
+            }
+
+            const res = await fetch('/api/media/upload/chunk', {
+              method: 'POST',
+              headers,
+              credentials: 'include',
+              body: chunkFormData,
+            });
+
+            const chunkData = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              throw new Error(chunkData.error || `Upload failed for chunk ${c + 1}/${totalChunks}`);
+            }
+            lastResData = chunkData;
+            const chunkOverallProgress = ((i + (c + 1) / totalChunks) / files.length) * 100;
+            setUploadProgress(Math.round(chunkOverallProgress));
+          }
+
+          if (lastResData?.media) {
+            uploadedMediaList.push(lastResData.media);
+          }
+          successCount++;
+        } else {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('storageId', selectedStorage);
+          formData.append('encrypt', String(encryptPayload));
+          if (selectedFolderId) {
+            formData.append('folderId', selectedFolderId);
+          }
+
+          const res = await fetch('/api/media/upload', {
+            method: 'POST',
+            headers,
+            credentials: 'include',
+            body: formData,
+          });
+
+          const resData = await res.json().catch(() => ({}));
+
+          if (!res.ok) {
+            throw new Error(resData.error || `Upload failed for ${file.name}`);
+          }
+
+          if (resData.media) {
+            uploadedMediaList.push(resData.media);
+          }
+
+          successCount++;
+          setUploadProgress(Math.round(((i + 1) / files.length) * 100));
         }
-
-        if (resData.media) {
-          uploadedMediaList.push(resData.media);
-        }
-
-        successCount++;
-        setUploadProgress(Math.round(((i + 1) / files.length) * 100));
       } catch (err) {
         setUploadError(err.message);
         setIsUploading(false);
