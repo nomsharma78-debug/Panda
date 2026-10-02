@@ -33,26 +33,10 @@ export async function GET(request) {
       }
     }
 
-    let [connections, combined] = await Promise.all([
+    const [connections, combined] = await Promise.all([
       listUserStorageConnections(authData.user.id, token),
       getCombinedStorageMetrics(authData.user.id, token),
     ]);
-
-    // Auto-discover if storage is connected but zero files/bytes registered
-    if (
-      (!combined?.usedBytes || combined.usedBytes === 0 || (connections && connections.length > 0 && connections.every(c => (c.used_bytes || 0) === 0))) &&
-      (connections && connections.length > 0)
-    ) {
-      try {
-        const synced = await StorageManager.syncStorageMedia(authData.user.id, token);
-        if (synced && synced.length > 0) {
-          [connections, combined] = await Promise.all([
-            listUserStorageConnections(authData.user.id, token),
-            getCombinedStorageMetrics(authData.user.id, token),
-          ]);
-        }
-      } catch { }
-    }
 
     return jsonSuccess({
       connections: connections || [],
