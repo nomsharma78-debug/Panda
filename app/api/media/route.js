@@ -21,16 +21,7 @@ export async function GET(request) {
   try {
     const shouldSync = searchParams.get('sync') === 'true';
 
-    // Cloud bucket reconciliation runs when explicitly requested
-    if (shouldSync) {
-      try {
-        await StorageManager.syncStorageMedia(authData.user.id, token);
-      } catch (syncErr) {
-        console.warn('[API media] Sync notice:', syncErr.message);
-      }
-    }
-
-    const items = await listUserMedia(authData.user.id, {
+    let items = await listUserMedia(authData.user.id, {
       token,
       mediaType,
       search,
@@ -38,6 +29,23 @@ export async function GET(request) {
       limit,
       offset,
     });
+
+    // Auto-reconcile cloud storage with database if sync is requested OR if local list is empty on first load
+    if (shouldSync || (items.length === 0 && !search && offset === 0)) {
+      try {
+        await StorageManager.syncStorageMedia(authData.user.id, token);
+        items = await listUserMedia(authData.user.id, {
+          token,
+          mediaType,
+          search,
+          folderId,
+          limit,
+          offset,
+        });
+      } catch (syncErr) {
+        console.warn('[API media] Auto-sync notice:', syncErr.message);
+      }
+    }
 
     return NextResponse.json(
       {
