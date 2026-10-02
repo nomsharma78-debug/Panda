@@ -30,10 +30,13 @@ export async function GET(request) {
       offset,
     });
 
-    // Auto-reconcile cloud storage with database if sync is requested OR if local list is empty on first load
+    // If explicit sync is requested OR if DB has zero items on first load, run cloud sync with a strict 2s race timeout
     if (shouldSync || (items.length === 0 && !search && offset === 0)) {
       try {
-        await StorageManager.syncStorageMedia(authData.user.id, token);
+        const syncPromise = StorageManager.syncStorageMedia(authData.user.id, token);
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve([]), 2000));
+        await Promise.race([syncPromise, timeoutPromise]);
+
         items = await listUserMedia(authData.user.id, {
           token,
           mediaType,
@@ -43,7 +46,7 @@ export async function GET(request) {
           offset,
         });
       } catch (syncErr) {
-        console.warn('[API media] Auto-sync notice:', syncErr.message);
+        console.warn('[API media] Fast sync notice:', syncErr.message);
       }
     }
 
