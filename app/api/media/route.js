@@ -34,10 +34,10 @@ export async function GET(request) {
     if (shouldSync) {
       try {
         const syncPromise = StorageManager.syncStorageMedia(authData.user.id, token);
-        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve([]), 2500));
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve([]), 3500));
         await Promise.race([syncPromise, timeoutPromise]);
 
-        items = await listUserMedia(authData.user.id, {
+        const refreshed = await listUserMedia(authData.user.id, {
           token,
           mediaType,
           search,
@@ -45,6 +45,9 @@ export async function GET(request) {
           limit,
           offset,
         });
+        if (refreshed && refreshed.length > 0) {
+          items = refreshed;
+        }
       } catch (syncErr) {
         console.warn('[API media] Fast sync notice:', syncErr.message);
       }
