@@ -30,11 +30,11 @@ export async function GET(request) {
       offset,
     });
 
-    // If explicit sync is requested OR if DB has zero items on first load, run cloud sync with a strict 2s race timeout
-    if (shouldSync || (items.length === 0 && !search && offset === 0)) {
+    // Only run cloud storage reconciliation when explicitly requested (e.g. ?sync=true)
+    if (shouldSync) {
       try {
         const syncPromise = StorageManager.syncStorageMedia(authData.user.id, token);
-        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve([]), 2000));
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve([]), 2500));
         await Promise.race([syncPromise, timeoutPromise]);
 
         items = await listUserMedia(authData.user.id, {

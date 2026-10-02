@@ -33,10 +33,8 @@ export async function GET(request) {
       }
     }
 
-    const [connections, combined] = await Promise.all([
-      listUserStorageConnections(authData.user.id, token),
-      getCombinedStorageMetrics(authData.user.id, token),
-    ]);
+    const connections = await listUserStorageConnections(authData.user.id, token);
+    const combined = await getCombinedStorageMetrics(authData.user.id, token, connections);
 
     return jsonSuccess({
       connections: connections || [],
