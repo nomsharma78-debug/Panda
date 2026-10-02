@@ -37,10 +37,32 @@ export async function GET(request) {
     const auditLogs = auditLogsRes.status === 'fulfilled' && auditLogsRes.value ? auditLogsRes.value : [];
 
     // 2. Compute storage metrics & media stats directly using preloaded connections & DB
-    const [storageMetrics, mediaStats] = await Promise.all([
+    let [storageMetrics, mediaStats] = await Promise.all([
       getCombinedStorageMetrics(userId, userToken, storageConnections),
       getMediaStats(userId, userToken),
     ]);
+
+    let finalRecentMedia = recentMedia;
+
+    // Auto-discover media files from connected buckets if media count is 0
+    if ((!mediaStats.total || mediaStats.total === 0 || recentMedia.length === 0) && storageConnections.length > 0) {
+      try {
+        const { StorageManager } = await import('@/lib/storage/storage-manager');
+        const syncPromise = StorageManager.syncStorageMedia(userId, userToken);
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve([]), 1500));
+        const discovered = await Promise.race([syncPromise, timeoutPromise]);
+        if (discovered && discovered.length > 0) {
+          const [refreshedStats, refreshedRecent, refreshedMetrics] = await Promise.all([
+            getMediaStats(userId, userToken),
+            getRecentMedia(userId, 6, userToken),
+            getCombinedStorageMetrics(userId, userToken, storageConnections),
+          ]);
+          mediaStats = refreshedStats;
+          finalRecentMedia = refreshedRecent;
+          storageMetrics = refreshedMetrics;
+        }
+      } catch {}
+    }
 
     return NextResponse.json(
       {
@@ -50,7 +72,7 @@ export async function GET(request) {
           ...storageMetrics,
           connections: storageConnections,
         },
-        recentMedia,
+        recentMedia: finalRecentMedia,
         recentActivity: auditLogs,
       },
       {

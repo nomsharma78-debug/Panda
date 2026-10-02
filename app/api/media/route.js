@@ -30,8 +30,8 @@ export async function GET(request) {
       offset,
     });
 
-    // Only run cloud storage reconciliation when explicitly requested (e.g. ?sync=true)
-    if (shouldSync) {
+    // If explicit sync is requested OR if DB has zero items, run cloud storage reconciliation
+    if (shouldSync || (items.length === 0 && !search && offset === 0)) {
       try {
         const syncPromise = StorageManager.syncStorageMedia(authData.user.id, token);
         const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve([]), 3500));
